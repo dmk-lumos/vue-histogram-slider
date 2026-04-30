@@ -1,6 +1,8 @@
+import type { PropType } from 'vue'
+
 export default {
   data: {
-    type: Array,
+    type: Array as PropType<number[]>,
     required: true
   },
   min: {
@@ -58,10 +60,10 @@ export default {
     default: true
   },
   type: {
-    type: String,
+    type: String as PropType<'double' | 'single'>,
     default: 'double',
-    validator: function(value) {
-      return ['double', 'single'].indexOf(value) !== -1
+    validator(value: unknown) {
+      return value === 'double' || value === 'single'
     }
   },
   width: {
@@ -84,7 +86,7 @@ export default {
     type: Number,
     default: 4
   },
-  prettify: Function,
+  prettify: Function as PropType<((_value: number) => string) | undefined>,
   labelColor: {
     type: String,
     default: '#0091ff'
@@ -126,7 +128,7 @@ export default {
     default: 6
   },
   colors: {
-    type: Array
+    type: Array as PropType<string[] | undefined>
   },
   updateColorOnChange: {
     type: Boolean,
