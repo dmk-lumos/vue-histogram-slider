@@ -86,7 +86,7 @@ export default {
     type: Number,
     default: 4
   },
-  prettify: Function as PropType<((n: number) => string) | undefined>,
+  prettify: Function as PropType<((_value: number) => string) | undefined>,
   labelColor: {
     type: String,
     default: '#0091ff'

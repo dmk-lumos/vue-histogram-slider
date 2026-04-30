@@ -4,6 +4,7 @@ module.exports = {
   env: {
     browser: true,
     es2022: true,
+    jquery: true,
     node: true
   },
   extends: [
@@ -20,9 +21,26 @@ module.exports = {
   },
   rules: {
     'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'off',
-    'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
+    'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off',
+    'no-unused-vars': 'off',
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
+    ]
   },
   overrides: [
+    {
+      files: ['*.d.ts'],
+      rules: {
+        '@typescript-eslint/no-unused-vars': 'off'
+      }
+    },
+    {
+      files: ['*.ts', '*.tsx'],
+      rules: {
+        'no-undef': 'off'
+      }
+    },
     {
       files: ['*.vue'],
       parser: 'vue-eslint-parser',
@@ -31,6 +49,9 @@ module.exports = {
         ecmaVersion: 'latest',
         sourceType: 'module',
         extraFileExtensions: ['.vue']
+      },
+      rules: {
+        'no-undef': 'off'
       }
     }
   ]
