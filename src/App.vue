@@ -3,29 +3,29 @@
     <div class="histogram-demo">
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Sparse grid + visible range labels</h2>
+          <h2 class="histogram-demo__title">Example: Date Range Histogram</h2>
           <p class="histogram-demo__lede">
-            Double-handle range on timestamp data with brush clipping, interval dragging, sparse axis
-            ticks, and the from/to bubbles left visible so formatted values stay on-screen.
+            Two handles on a timeline of sample dates. Brush the histogram to zoom, grab both handles at
+            once to slide the whole window, and keep the readable dates on the handles—nothing’s hidden.
           </p>
           <dl class="histogram-demo__meta">
             <div class="histogram-demo__meta-row">
               <dt>Mode</dt>
-              <dd><code>type="double"</code> — two handles, range selection</dd>
+              <dd>A classic “from → to” range on the same dataset every example uses.</dd>
             </div>
             <div class="histogram-demo__meta-row">
-              <dt>Interaction</dt>
+              <dt>Worth trying</dt>
               <dd>
-                <code>clip</code> + brush on the histogram, <code>drag-interval</code> to move the whole
-                span, <code>:hideFromTo="false"</code> shows the floating from/to labels (still driven by
-                <code>prettify</code>)
+                Drag the shaded interval as one piece. Double-click the chart resets the zoom when clipping
+                is on.
+                <span class="histogram-demo__hint">(<code>double</code>, sparse ticks, labels shown)</span>
               </dd>
             </div>
             <div class="histogram-demo__meta-row">
-              <dt>Distinction</dt>
+              <dt>Compared below</dt>
               <dd>
-                <code>:grid-num="2"</code> for fewer grid ticks than the default below, and unlike the
-                second demo the handle labels are not hidden
+                The next block swaps to one handle with the same look. The last one hides the date bubbles
+                and nudges the range from code after load.
               </dd>
             </div>
           </dl>
@@ -48,33 +48,78 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Default grid + hidden labels + programmatic <code>update()</code></h2>
+          <h2 class="histogram-demo__title">Example: Date Cutoff Histogram</h2>
           <p class="histogram-demo__lede">
-            Same core behavior as the first slider (colors, clip, interval drag) but with denser default
-            grid ticks, from/to bubbles hidden for a minimal chrome look, and an imperative range jump
-            after mount.
+            Same colours, spacing, and gentle tick marks as above—but one thumb, so you’re choosing a
+            single moment on the timeline instead of a span.
           </p>
           <dl class="histogram-demo__meta">
             <div class="histogram-demo__meta-row">
               <dt>Mode</dt>
               <dd>
-                <code>type="double"</code> — same two-handle range model; differs mainly in
-                <code>gridNum</code>, <code>hideFromTo</code>, and the scripted <code>update()</code>
+                Single-handle mode for selecting data up to a cutoff point
+                <span class="histogram-demo__hint">(<code>type="single"</code>)</span>
               </dd>
             </div>
             <div class="histogram-demo__meta-row">
-              <dt>Properties</dt>
+              <dt>Worth trying</dt>
               <dd>
-                Default <code>gridNum</code> (4), same gradient <code>colors</code>, <code>clip</code>,
-                <code>drag-interval</code>, <code>:hideFromTo="true"</code> to hide the handle labels,
-                <code>force-edges="false"</code>
+                Scroll up once: the highlighted bins read differently with one handle versus two—that’s
+                the main visual story.
               </dd>
             </div>
             <div class="histogram-demo__meta-row">
-              <dt>Distinction</dt>
+              <dt>Compared above</dt>
               <dd>
-                After two seconds, the demo calls <code>ref.update({ from, to })</code> to snap the range
-                — useful for syncing the widget to external filters or restored UI state
+                Matches the first demo’s styling; range-drag isn’t applicable here because there’s only one
+                handle.
+              </dd>
+            </div>
+          </dl>
+        </header>
+        <HistogramSlider
+          type="single"
+          :width="sliderWidth"
+          :bar-height="110"
+          :data="data"
+          :prettify="prettify"
+          :clip="true"
+          :hideFromTo="false"
+          :force-edges="false"
+          :colors="['#4facfe', '#00f2fe']"
+          :grid-num="2"
+          @finish="finish"
+        />
+      </section>
+
+      <section class="histogram-demo__card">
+        <header class="histogram-demo__header">
+          <h2 class="histogram-demo__title">Example: Programmatic Updates</h2>
+          <p class="histogram-demo__lede">
+            Two handles again and the same gradient story, but more ticks along the track and no floating
+            date labels—cleaner at a glance. Wait two seconds: the selection snaps elsewhere to show how
+            your app can drive the slider after data loads.
+          </p>
+          <dl class="histogram-demo__meta">
+            <div class="histogram-demo__meta-row">
+              <dt>Mode</dt>
+              <dd>
+                Range selection like the top example, presented with less on-screen text and a busier axis.
+              </dd>
+            </div>
+            <div class="histogram-demo__meta-row">
+              <dt>Worth trying</dt>
+              <dd>
+                Watch for the timed jump—that mimics restoring a saved filter or applying a preset from
+                your UI.
+                <span class="histogram-demo__hint">(<code>update()</code> on a ref)</span>
+              </dd>
+            </div>
+            <div class="histogram-demo__meta-row">
+              <dt>Compared above</dt>
+              <dd>
+                More grid ticks than the first pair; handle dates stay tucked away so only the chart and bar
+                carry most of the signal.
               </dd>
             </div>
           </dl>
@@ -267,6 +312,11 @@ body,
   padding: 0.1em 0.3em;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.05);
+}
+
+.histogram-demo__hint {
+  color: #5c6d80;
+  font-size: 0.92em;
 }
 
 @media (max-width: 520px) {
