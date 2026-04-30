@@ -3,29 +3,30 @@
     <div class="histogram-demo">
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Example: Date Range Histogram</h2>
+          <h2 class="histogram-demo__title">Double range, brush, interval drag</h2>
           <p class="histogram-demo__lede">
-            Two handles on a timeline of sample dates. Brush the histogram to zoom, grab both handles at
-            once to slide the whole window, and keep the readable dates on the handles—nothing’s hidden.
+            Two handles on timestamp data with brush zoom on the chart and the option to drag the whole
+            selected span on the track.
           </p>
           <dl class="histogram-demo__meta">
             <div class="histogram-demo__meta-row">
-              <dt>Mode</dt>
-              <dd>A classic “from → to” range on the same dataset every example uses.</dd>
-            </div>
-            <div class="histogram-demo__meta-row">
-              <dt>Worth trying</dt>
+              <dt>Customizations</dt>
               <dd>
-                Drag the shaded interval as one piece. Double-click the chart resets the zoom when clipping
-                is on.
-                <span class="histogram-demo__hint">(<code>double</code>, sparse ticks, labels shown)</span>
+                <ul class="histogram-demo__prop-list">
+                  <li><code>type="double"</code> — two-handle range (library default).</li>
+                  <li><code>:drag-interval="true"</code> — drag both handles together (default is <code>false</code>).</li>
+                  <li><code>:grid-num="2"</code> — two major divisions on the slider grid (default is <code>4</code>).</li>
+                  <li><code>:hide-from-to="false"</code> — show formatted values on handles (matches default).</li>
+                  <li><code>:clip="true"</code>, gradient <code>:colors</code>, <code>:prettify</code> — same as typical setup.</li>
+                </ul>
               </dd>
             </div>
             <div class="histogram-demo__meta-row">
-              <dt>Compared below</dt>
+              <dt>Key features</dt>
               <dd>
-                The next block swaps to one handle with the same look. The last one hides the date bubbles
-                and nudges the range from code after load.
+                Brush the histogram to narrow the domain; double-click the chart to reset when
+                <code>clip</code> is on. Grid ticks are on the slider strip below the SVG, not the histogram
+                bars.
               </dd>
             </div>
           </dl>
@@ -48,31 +49,29 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Example: Date Cutoff Histogram</h2>
+          <h2 class="histogram-demo__title">Single-handle cutoff</h2>
           <p class="histogram-demo__lede">
-            Same colours, spacing, and gentle tick marks as above—but one thumb, so you’re choosing a
-            single moment on the timeline instead of a span.
+            One thumb selects a single value on the same timeline; the histogram reflects single-handle
+            colouring rules.
           </p>
           <dl class="histogram-demo__meta">
             <div class="histogram-demo__meta-row">
-              <dt>Mode</dt>
+              <dt>Customizations</dt>
               <dd>
-                Single-handle mode for selecting data up to a cutoff point
-                <span class="histogram-demo__hint">(<code>type="single"</code>)</span>
+                <ul class="histogram-demo__prop-list">
+                  <li><code>type="single"</code> — one handle; <code>drag-interval</code> is omitted (only applies to double sliders).</li>
+                  <li>
+                    Otherwise aligned with the first block: <code>:clip</code>, <code>:grid-num="2"</code>,
+                    <code>:hide-from-to="false"</code>, same <code>:colors</code> and <code>:prettify</code>.
+                  </li>
+                </ul>
               </dd>
             </div>
             <div class="histogram-demo__meta-row">
-              <dt>Worth trying</dt>
+              <dt>Key features</dt>
               <dd>
-                Scroll up once: the highlighted bins read differently with one handle versus two—that’s
-                the main visual story.
-              </dd>
-            </div>
-            <div class="histogram-demo__meta-row">
-              <dt>Compared above</dt>
-              <dd>
-                Matches the first demo’s styling; range-drag isn’t applicable here because there’s only one
-                handle.
+                Bins pick up colour on one side of the thumb only—the component treats single and double
+                ranges differently.
               </dd>
             </div>
           </dl>
@@ -94,38 +93,189 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Example: Programmatic Updates</h2>
+          <h2 class="histogram-demo__title">Slider grid density</h2>
           <p class="histogram-demo__lede">
-            Two handles again and the same gradient story, but more ticks along the track and no floating
-            date labels—cleaner at a glance. Wait two seconds: the selection snaps elsewhere to show how
-            your app can drive the slider after data loads.
+            Same double-handle setup as the first example; only the Ion.RangeSlider grid spacing changes so
+            you can see what <code>gridNum</code> affects on the track.
           </p>
           <dl class="histogram-demo__meta">
             <div class="histogram-demo__meta-row">
-              <dt>Mode</dt>
+              <dt>Customizations</dt>
               <dd>
-                Range selection like the top example, presented with less on-screen text and a busier axis.
+                <ul class="histogram-demo__prop-list">
+                  <li>
+                    <code>:grid-num="4"</code> — library default; more tick marks under the track than the
+                    blocks using <code>2</code>.
+                  </li>
+                  <li>
+                    Matches the first example for <code>type</code>, <code>clip</code>,
+                    <code>drag-interval</code>, <code>hide-from-to</code>, <code>colors</code>, and
+                    <code>prettify</code>.
+                  </li>
+                </ul>
               </dd>
             </div>
             <div class="histogram-demo__meta-row">
-              <dt>Worth trying</dt>
+              <dt>Key features</dt>
               <dd>
-                Watch for the timed jump—that mimics restoring a saved filter or applying a preset from
-                your UI.
-                <span class="histogram-demo__hint">(<code>update()</code> on a ref)</span>
-              </dd>
-            </div>
-            <div class="histogram-demo__meta-row">
-              <dt>Compared above</dt>
-              <dd>
-                More grid ticks than the first pair; handle dates stay tucked away so only the chart and bar
-                carry most of the signal.
+                Histogram bar width is unchanged—only the labelled ticks on the slider below differ.
               </dd>
             </div>
           </dl>
         </header>
         <HistogramSlider
-          ref="hist"
+          type="double"
+          :width="sliderWidth"
+          :bar-height="110"
+          :data="data"
+          :prettify="prettify"
+          :clip="true"
+          :drag-interval="true"
+          :hideFromTo="false"
+          :force-edges="false"
+          :colors="['#4facfe', '#00f2fe']"
+          :grid-num="4"
+          @finish="finish"
+        />
+      </section>
+
+      <section class="histogram-demo__card">
+        <header class="histogram-demo__header">
+          <h2 class="histogram-demo__title">Histogram bar density</h2>
+          <p class="histogram-demo__lede">
+            Narrower, tighter-packed rects from <code>barWidth</code> and <code>barGap</code>; bin thresholds
+            still follow chart width, but each bar draws thinner so more columns fit in view.
+          </p>
+          <dl class="histogram-demo__meta">
+            <div class="histogram-demo__meta-row">
+              <dt>Customizations</dt>
+              <dd>
+                <ul class="histogram-demo__prop-list">
+                  <li>
+                    <code>:bar-width="4"</code> — default is <code>6</code>; slimmer histogram columns.
+                  </li>
+                  <li>
+                    <code>:bar-gap="2"</code> — default is <code>5</code>; less space between bars for a
+                    denser chart.
+                  </li>
+                  <li>
+                    Same interaction bundle as the first double example: <code>clip</code>,
+                    <code>drag-interval</code>, <code>grid-num="2"</code>, cyan gradient
+                    <code>colors</code>.
+                  </li>
+                </ul>
+              </dd>
+            </div>
+            <div class="histogram-demo__meta-row">
+              <dt>Key features</dt>
+              <dd>
+                Zoom with brush—the bars redraw with the same geometry props inside the new domain.
+              </dd>
+            </div>
+          </dl>
+        </header>
+        <HistogramSlider
+          type="double"
+          :width="sliderWidth"
+          :bar-height="110"
+          :bar-width="4"
+          :bar-gap="2"
+          :data="data"
+          :prettify="prettify"
+          :clip="true"
+          :drag-interval="true"
+          :hideFromTo="false"
+          :force-edges="false"
+          :colors="['#4facfe', '#00f2fe']"
+          :grid-num="2"
+          @finish="finish"
+        />
+      </section>
+
+      <section class="histogram-demo__card">
+        <header class="histogram-demo__header">
+          <h2 class="histogram-demo__title">Bar colour gradient</h2>
+          <p class="histogram-demo__lede">
+            The <code>colors</code> prop feeds a linear scale along the value axis—swap stops for a different
+            ramp without touching D3 directly.
+          </p>
+          <dl class="histogram-demo__meta">
+            <div class="histogram-demo__meta-row">
+              <dt>Customizations</dt>
+              <dd>
+                <ul class="histogram-demo__prop-list">
+                  <li>
+                    <code>:colors="['#667eea', '#764ba2']"</code> — purple ramp instead of the cyan/teal used
+                    elsewhere here.
+                  </li>
+                  <li>
+                    Defaults for <code>bar-width</code> / <code>bar-gap</code>; same double-handle setup as the
+                    first example (<code>drag-interval</code>, <code>grid-num="2"</code>, labels visible).
+                  </li>
+                </ul>
+              </dd>
+            </div>
+            <div class="histogram-demo__meta-row">
+              <dt>Key features</dt>
+              <dd>
+                Selected-range highlighting still uses the gradient; “outside” bins fall back to the holder
+                colour from props.
+              </dd>
+            </div>
+          </dl>
+        </header>
+        <HistogramSlider
+          type="double"
+          :width="sliderWidth"
+          :bar-height="110"
+          :data="data"
+          :prettify="prettify"
+          :clip="true"
+          :drag-interval="true"
+          :hideFromTo="false"
+          :force-edges="false"
+          :colors="gradientPurple"
+          :grid-num="2"
+          @finish="finish"
+        />
+      </section>
+
+      <section class="histogram-demo__card">
+        <header class="histogram-demo__header">
+          <h2 class="histogram-demo__title">Hidden handle labels &amp; imperative <code>update()</code></h2>
+          <p class="histogram-demo__lede">
+            Double range with minimal chrome on the track; after load the demo calls
+            <code>update()</code> on a component ref to snap the selection—useful when restoring filters or
+            syncing external state.
+          </p>
+          <dl class="histogram-demo__meta">
+            <div class="histogram-demo__meta-row">
+              <dt>Customizations</dt>
+              <dd>
+                <ul class="histogram-demo__prop-list">
+                  <li><code>:hide-from-to="true"</code> — hide floating from/to labels (default is <code>false</code>).</li>
+                  <li>
+                    <code>:grid-num</code> omitted — uses default <code>4</code> (same grid density as the
+                    previous block).
+                  </li>
+                  <li>
+                    Parent calls <code>ref.update({ from, to })</code> in <code>mounted</code> after a short
+                    delay; everything else matches the double-handle examples above.
+                  </li>
+                </ul>
+              </dd>
+            </div>
+            <div class="histogram-demo__meta-row">
+              <dt>Key features</dt>
+              <dd>
+                Watch the handles jump a few seconds after load; pair with your own data-loading pipeline in
+                a real app.
+              </dd>
+            </div>
+          </dl>
+        </header>
+        <HistogramSlider
+          ref="demoProgrammatic"
           type="double"
           :width="sliderWidth"
           :bar-height="110"
@@ -158,6 +308,8 @@ export default defineComponent({
   data() {
     return {
       sliderWidth: SLIDER_MAX_WIDTH,
+      /** Warm purple ramp for the gradient-only demo */
+      gradientPurple: ['#667eea', '#764ba2'] as const,
       data: (dataJson as string[]).map((d) => new Date(d).valueOf()),
       prettify(ts: number) {
         return new Date(ts).toLocaleDateString('en', {
@@ -185,8 +337,8 @@ export default defineComponent({
     window.addEventListener('resize', this.syncSliderWidth)
 
     setTimeout(() => {
-      const hist = this.$refs.hist as InstanceType<typeof HistogramSlider> | undefined
-      hist?.update({ from: this.data[20], to: this.data[69] })
+      const demo = this.$refs.demoProgrammatic as InstanceType<typeof HistogramSlider> | undefined
+      demo?.update({ from: this.data[20], to: this.data[69] })
     }, 2000)
   },
 
@@ -280,9 +432,26 @@ body,
   text-align: left;
 }
 
+.histogram-demo__prop-list {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.histogram-demo__prop-list li {
+  margin: 0.35em 0;
+}
+
+.histogram-demo__prop-list li:first-child {
+  margin-top: 0;
+}
+
+.histogram-demo__prop-list li:last-child {
+  margin-bottom: 0;
+}
+
 .histogram-demo__meta-row {
   display: grid;
-  grid-template-columns: 7rem 1fr;
+  grid-template-columns: minmax(9rem, 12rem) 1fr;
   gap: 0.75rem 1rem;
   align-items: baseline;
   padding: 0.65rem 0.85rem;
@@ -312,11 +481,6 @@ body,
   padding: 0.1em 0.3em;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.05);
-}
-
-.histogram-demo__hint {
-  color: #5c6d80;
-  font-size: 0.92em;
 }
 
 @media (max-width: 520px) {
