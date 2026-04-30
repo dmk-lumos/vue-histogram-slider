@@ -24,20 +24,24 @@ If you are a try and learn developer, you can start trying the vue-histogram-sli
     <img src="https://github.com/oguzhaninan/vue-histogram-slider/raw/master/resources/histogram-slider-demo.gif">
 </p>
 
-## 📦 Installation    
-### yarn
-`yarn add vue-histogram-slider`
+## 📦 Installation
 
-### npm
-`npm i vue-histogram-slider`
+Requires **Vue 3** as a peer dependency.
+
+```bash
+npm install vue-histogram-slider vue
+```
 
 ## 🔧 Usage
 ```js
-import Vue from 'vue';
+import { createApp } from 'vue';
+import App from './App.vue';
 import HistogramSlider from 'vue-histogram-slider';
 import 'vue-histogram-slider/dist/histogram-slider.css';
 
-Vue.component(HistogramSlider.name, HistogramSlider);
+const app = createApp(App);
+app.component(HistogramSlider.name, HistogramSlider);
+app.mount('#app');
 ```
 
 ```xml

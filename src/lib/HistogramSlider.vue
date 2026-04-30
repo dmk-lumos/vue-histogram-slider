@@ -14,8 +14,8 @@
 </template>
 
 <script>
-var $ = require('jquery')
-import './range-slider'
+import $ from 'jquery'
+import './range-slider.cjs'
 import props from './props'
 import * as d3Scale from 'd3-scale'
 import * as d3Array from 'd3-array'
@@ -23,16 +23,19 @@ import * as d3Select from 'd3-selection'
 import * as d3Trans from 'd3-transition'
 import * as d3Brush from 'd3-brush'
 
+let nextHistogramSliderUid = 0
+
 export default {
   name: 'HistogramSlider',
 
   props,
 
   data() {
+    const uid = ++nextHistogramSliderUid
     return {
-      id: `vue-histogram-${this._uid}`,
-      histogramId: `histogram-slider-${this._uid}`,
-      clipId: `clip-${this._uid}`
+      id: `vue-histogram-${uid}`,
+      histogramId: `histogram-slider-${uid}`,
+      clipId: `clip-${uid}`
     }
   },
 
@@ -227,8 +230,10 @@ export default {
     updateHistogram([min, max])
   },
 
-  destroyed() {
-    this.ionRangeSlider.destroy()
+  unmounted() {
+    if (this.ionRangeSlider) {
+      this.ionRangeSlider.destroy()
+    }
   }
 }
 </script>
