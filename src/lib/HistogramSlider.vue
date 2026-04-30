@@ -38,6 +38,17 @@ function getD3BrushSelection(): [number, number] | null {
 
 export type RangeValues = { from: number; to: number }
 
+function clampSelection(from: number, to: number, lo: number, hi: number): RangeValues {
+  let f = Math.min(Math.max(from, lo), hi)
+  let t = Math.min(Math.max(to, lo), hi)
+  if (f > t) {
+    const swap = f
+    f = t
+    t = swap
+  }
+  return { from: f, to: t }
+}
+
 type BinDatum = { x0: number; length: number }
 
 /** Root SVG we draw the histogram into (parent in the DOM is HTML). */
@@ -110,6 +121,42 @@ export default defineComponent({
 
     const domainTuple = (lo: number, hi: number): [number, number] => [lo, hi]
 
+    /**
+     * Single without custom defaultFrom: Ion.RangeSlider paints the track from min → handle, so highlighted
+     * bins use `x0 < from`; handle starts at domain max so the whole series is included initially.
+     */
+    const singleSelectAllRange = (_lo: number, hi: number): RangeValues => ({ from: hi, to: hi })
+
+    const resetRangeToExtent = (lo: number, hi: number): RangeValues => {
+      if (!isTypeSingle && typeof this.defaultFrom === 'number' && typeof this.defaultTo === 'number') {
+        return clampSelection(this.defaultFrom, this.defaultTo, lo, hi)
+      }
+      if (isTypeSingle && typeof this.defaultFrom === 'number') {
+        return { from: Math.min(Math.max(this.defaultFrom, lo), hi), to: hi }
+      }
+      if (isTypeSingle) {
+        return singleSelectAllRange(lo, hi)
+      }
+      return { from: lo, to: hi }
+    }
+
+    const initialRangeForDomain = (domainMin: number, domainMax: number): RangeValues => {
+      const zoomed = domainMin !== min || domainMax !== max
+      if (zoomed && isTypeSingle && typeof this.defaultFrom === 'number') {
+        return {
+          from: Math.min(Math.max(this.defaultFrom, domainMin), domainMax),
+          to: domainMax
+        }
+      }
+      if (zoomed && isTypeSingle) {
+        return singleSelectAllRange(domainMin, domainMax)
+      }
+      if (zoomed) {
+        return { from: domainMin, to: domainMax }
+      }
+      return resetRangeToExtent(domainMin, domainMax)
+    }
+
     let svg: SvgChartSelection
     let x: d3Scale.ScaleLinear<number, number>
     let y: d3Scale.ScaleLinear<number, number>
@@ -145,17 +192,18 @@ export default defineComponent({
       .attr('width', width)
       .attr('height', this.barHeight)
       .on('dblclick', () => {
-        if (this.clip) {
-          x.domain(domainTuple(min, max))
-          if (brushBehavior) {
-            hist.call(brushBehavior.clear)
-          }
-          updateHistogram([min, max])
-          const pos = { from: min, to: max }
-          this.update(pos)
-          this.$emit('finish', pos)
-          this.$emit('change', pos)
+        if (!this.clip) {
+          return
         }
+        x.domain(domainTuple(min, max))
+        if (brushBehavior) {
+          hist.call(brushBehavior.clear)
+        }
+        updateHistogram([min, max])
+        const pos = resetRangeToExtent(min, max)
+        this.update(pos)
+        this.$emit('finish', pos)
+        this.$emit('change', pos)
       })
 
     hist = svg.append('g').attr('class', 'histogram')
@@ -208,12 +256,14 @@ export default defineComponent({
         this.ionRangeSlider.destroy()
       }
 
+      const sliderRange = initialRangeForDomain(domainMin, domainMax)
+
       this.histSlider = ($(`#${this.histogramId}`) as JQueryIonRange).ionRangeSlider({
         skin: 'round',
         min: domainMin,
         max: domainMax,
-        from: domainMin,
-        to: domainMax,
+        from: sliderRange.from,
+        to: sliderRange.to,
         type: this.type,
         grid: this.grid,
         step: this.step,
