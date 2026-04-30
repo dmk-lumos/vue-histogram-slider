@@ -13,10 +13,13 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
 import $ from 'jquery'
-import './range-slider.cjs'
+import './range-slider'
+import { defineComponent } from 'vue'
 import props from './props'
+import type { IonRangeSliderHandle } from '../types/jquery-ion-range-slider'
+import type { JQuery } from 'jquery'
 import * as d3Scale from 'd3-scale'
 import * as d3Array from 'd3-array'
 import * as d3Select from 'd3-selection'
@@ -25,22 +28,44 @@ import * as d3Brush from 'd3-brush'
 
 let nextHistogramSliderUid = 0
 
-export default {
+/** d3-selection v1 + d3-brush expose the active gesture on `selection.event`. */
+function getD3BrushSelection(): [number, number] | null {
+  const ns = d3Select as typeof d3Select & {
+    event?: { selection: [number, number] | null }
+  }
+  return ns.event?.selection ?? null
+}
+
+export type RangeValues = { from: number; to: number }
+
+type BinDatum = { x0: number; length: number }
+
+export default defineComponent({
   name: 'HistogramSlider',
 
   props,
 
-  data() {
+  data(): {
+    id: string
+    histogramId: string
+    clipId: string
+    ionRangeSlider: IonRangeSliderHandle | null
+    histSlider: JQuery | null
+    updateBarColor: ((val: RangeValues) => void) | null
+  } {
     const uid = ++nextHistogramSliderUid
     return {
       id: `vue-histogram-${uid}`,
       histogramId: `histogram-slider-${uid}`,
-      clipId: `clip-${uid}`
+      clipId: `clip-${uid}`,
+      ionRangeSlider: null,
+      histSlider: null,
+      updateBarColor: null
     }
   },
 
   computed: {
-    style() {
+    style(): string {
       return `
         width: ${this.width}px;
         --primary-color: ${this.primaryColor};
@@ -58,28 +83,33 @@ export default {
   },
 
   methods: {
-    update({ from, to }) {
+    update({ from, to }: RangeValues) {
       if (this.ionRangeSlider) {
         this.ionRangeSlider.update({ from, to })
-        this.updateBarColor({ from, to })
+        this.updateBarColor?.({ from, to })
       }
     }
   },
 
   mounted() {
     const width = this.width - 20
-    const min = this.min || d3Array.min(this.data)
-    const max = this.max || d3Array.max(this.data)
-    const isTypeSingle = this.type == 'single'
-    var svg, histogram, x, y, hist, bins, colors, brush
+    const min = this.min ?? d3Array.min(this.data) ?? 0
+    const max = this.max ?? d3Array.max(this.data) ?? 0
+    const isTypeSingle = this.type === 'single'
+    let svg
+    let x: d3Scale.ScaleLinear<number, number>
+    let y: d3Scale.ScaleLinear<number, number>
+    let hist
+    let bins: BinDatum[]
+    let colors: (t: number) => string
 
-    this.updateBarColor = val => {
-      var transition = d3Trans.transition().duration(this.transitionDuration)
+    this.updateBarColor = (val: RangeValues) => {
+      const transition = d3Trans.transition().duration(this.transitionDuration)
 
       d3Trans
         .transition(transition)
         .selectAll(`.vue-histogram-slider-bar-${this.id}`)
-        .attr('fill', d => {
+        .attr('fill', (d: BinDatum) => {
           if (isTypeSingle) {
             return d.x0 < val.from ? colors(d.x0) : this.holderColor
           }
@@ -87,14 +117,8 @@ export default {
         })
     }
 
-    // x scale for time
-    x = d3Scale
-      .scaleLinear()
-      .domain([min, max])
-      .range([0, width])
-      .clamp(true)
+    x = d3Scale.scaleLinear().domain([min, max]).range([0, width]).clamp(true)
 
-    // y scale for histogram
     y = d3Scale.scaleLinear().range([this.barHeight, 0])
 
     svg = d3Select
@@ -119,28 +143,24 @@ export default {
     }
 
     if (this.colors) {
-      colors = d3Scale
-        .scaleLinear()
-        .domain([min, max])
-        .range(this.colors)
+      colors = d3Scale.scaleLinear<string>().domain([min, max]).range(this.colors)
     } else {
       colors = () => this.primaryColor
     }
 
-    const updateHistogram = ([min, max]) => {
-      let transition = d3Trans.transition().duration(this.transitionDuration)
+    const updateHistogram = ([domainMin, domainMax]: [number, number]) => {
+      const transition = d3Trans.transition().duration(this.transitionDuration)
 
       hist.selectAll(`.vue-histogram-slider-bar-${this.id}`).remove()
 
-      histogram = d3Array
+      const binGenerator = d3Array
         .bin()
         .domain(x.domain())
         .thresholds(width / (this.barWidth + this.barGap))
 
-      // group data for bars
-      bins = histogram(this.data)
+      bins = binGenerator(this.data) as BinDatum[]
 
-      y.domain([0, d3Array.max(bins, d => d.length)])
+      y.domain([0, d3Array.max(bins, (d) => d.length) ?? 0])
 
       hist
         .selectAll(`.vue-histogram-slider-bar-${this.id}`)
@@ -148,13 +168,13 @@ export default {
         .enter()
         .insert('rect', 'rect.overlay')
         .attr('class', `vue-histogram-slider-bar-${this.id}`)
-        .attr('x', d => x(d.x0))
-        .attr('y', d => y(d.length))
+        .attr('x', (d) => x(d.x0))
+        .attr('y', (d) => y(d.length))
         .attr('rx', this.barRadius)
         .attr('width', this.barWidth)
         .transition(transition)
-        .attr('height', d => this.barHeight - y(d.length))
-        .attr('fill', d => (isTypeSingle ? this.holderColor : colors(d.x0)))
+        .attr('height', (d) => this.barHeight - y(d.length))
+        .attr('fill', (d) => (isTypeSingle ? this.holderColor : colors(d.x0)))
 
       if (this.ionRangeSlider) {
         this.ionRangeSlider.destroy()
@@ -162,10 +182,10 @@ export default {
 
       this.histSlider = $(`#${this.histogramId}`).ionRangeSlider({
         skin: 'round',
-        min: min,
-        max: max,
-        from: min,
-        to: max,
+        min: domainMin,
+        max: domainMax,
+        from: domainMin,
+        to: domainMax,
         type: this.type,
         grid: this.grid,
         step: this.step,
@@ -179,39 +199,42 @@ export default {
         block: this.block,
         keyboard: this.keyboard,
         prettify: this.prettify,
-        onStart: val => {
+        onStart: (val: RangeValues) => {
           this.$emit('start', val)
         },
-        onUpdate: val => {
+        onUpdate: (val: RangeValues) => {
           this.$emit('update', val)
         },
-        onFinish: val => {
+        onFinish: (val: RangeValues) => {
           if (!this.updateColorOnChange) {
-            this.updateBarColor(val)
+            this.updateBarColor?.(val)
           }
           this.$emit('finish', val)
         },
-        onChange: val => {
+        onChange: (val: RangeValues) => {
           if (this.updateColorOnChange) {
-            this.updateBarColor(val)
+            this.updateBarColor?.(val)
           }
           this.$emit('change', val)
         }
       })
 
-      this.ionRangeSlider = this.histSlider.data('ionRangeSlider')
+      this.ionRangeSlider = this.histSlider.data(
+        'ionRangeSlider'
+      ) as IonRangeSliderHandle
 
-      setTimeout(
-        () => this.updateBarColor(this.ionRangeSlider.result),
-        this.transitionDuration + 10
-      )
+      setTimeout(() => {
+        if (this.ionRangeSlider && this.updateBarColor) {
+          this.updateBarColor(this.ionRangeSlider.result)
+        }
+      }, this.transitionDuration + 10)
     }
 
     if (this.clip) {
-      brush = d3Brush.brushX().on('end', () => {
-        var extent = d3Select.event.selection
-        if (extent) {
-          var domain = [x.invert(extent[0]), x.invert(extent[1])]
+      const brush = d3Brush.brushX().on('end', () => {
+        const extent = getD3BrushSelection()
+        if (extent && this.ionRangeSlider) {
+          const domain = [x.invert(extent[0]), x.invert(extent[1])] as [number, number]
           x.domain(domain)
           const pos = {
             from: Math.max(domain[0], this.ionRangeSlider.result.from),
@@ -235,7 +258,7 @@ export default {
       this.ionRangeSlider.destroy()
     }
   }
-}
+})
 </script>
 
 <style>

@@ -34,15 +34,19 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
+import { defineComponent } from 'vue'
 import HistogramSlider from './lib/HistogramSlider.vue'
 import dataJson from '../resources/data.json'
 
-export default {
+export default defineComponent({
+  components: {
+    HistogramSlider
+  },
   data() {
     return {
-      data: dataJson.map((d) => new Date(d).valueOf()),
-      prettify: function(ts) {
+      data: (dataJson as string[]).map((d) => new Date(d).valueOf()),
+      prettify(ts: number) {
         return new Date(ts).toLocaleDateString('en', {
           year: 'numeric',
           month: 'short',
@@ -53,19 +57,16 @@ export default {
   },
 
   methods: {
-    finish(val) {
-      console.log(val)
+    finish(val: { from: number; to: number }) {
+      
     }
   },
 
   mounted() {
     setTimeout(() => {
-      this.$refs.hist.update({ from: this.data[20], to: this.data[69] })
+      const hist = this.$refs.hist as InstanceType<typeof HistogramSlider> | undefined
+      hist?.update({ from: this.data[20], to: this.data[69] })
     }, 2000)
-  },
-
-  components: {
-    HistogramSlider
   }
-}
+})
 </script>
