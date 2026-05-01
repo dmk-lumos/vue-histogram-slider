@@ -19,7 +19,9 @@
   ],
   "sideEffects": [
     "**/*.css",
-    "**/range-slider.ts"
+    "**/range-slider.ts",
+    "dist/histogram-slider.mjs",
+    "dist/histogram-slider.umd.min.js"
   ],
   "license": "MIT",
   "repository": {
