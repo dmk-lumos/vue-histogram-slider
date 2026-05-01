@@ -407,7 +407,7 @@ export default defineComponent({
     return {
       sliderWidth: SLIDER_MAX_WIDTH,
       /** Warm purple ramp for the gradient-only demo */
-      gradientPurple: ['#667eea', '#764ba2'] as const,
+      gradientPurple: ['#667eea', '#764ba2'],
       data: (dataJson as string[]).map((d) => new Date(d).valueOf()),
       prettify(ts: number) {
         return new Date(ts).toLocaleDateString('en', {
