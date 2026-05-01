@@ -1,12 +1,14 @@
 {
   "name": "vue-histogram-slider",
-  "description": "Range slider with histogram for vue.js",
+  "description": "Vue 3 range slider with D3 histogram, brush zoom, TypeScript types, and v-model.",
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/histogram-slider.umd.min.js",
   "module": "./dist/histogram-slider.mjs",
+  "types": "./dist/histogram-slider.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/histogram-slider.d.ts",
       "import": "./dist/histogram-slider.mjs",
       "require": "./dist/histogram-slider.umd.min.js"
     },
@@ -28,13 +30,21 @@
     "type": "git",
     "url": "https://github.com/dmk-lumos/vue-histogram-slider.git"
   },
+  "homepage": "https://github.com/dmk-lumos/vue-histogram-slider#readme",
+  "bugs": {
+    "url": "https://github.com/dmk-lumos/vue-histogram-slider/issues"
+  },
   "keywords": [
     "vue",
+    "vue3",
     "vuejs",
     "slider",
     "range-slider",
     "histogram",
-    "histogram-slider"
+    "histogram-slider",
+    "typescript",
+    "d3",
+    "ion-range-slider"
   ],
   "peerDependencies": {
     "vue": "^3.4.0"
@@ -69,6 +79,7 @@
     "typescript": ">=5.4 <6",
     "vite": ">=5.4.0 <9",
     "vue": "^3.5.0",
+    "vite-plugin-dts": "^4.5.4",
     "vue-eslint-parser": "^10.4.0",
     "vue-tsc": ">=2.1.0 <4"
   },

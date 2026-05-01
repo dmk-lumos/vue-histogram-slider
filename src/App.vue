@@ -18,6 +18,7 @@
                   <li><code>:grid-num="2"</code> — two major divisions on the slider grid (default is <code>4</code>).</li>
                   <li><code>:hide-from-to="false"</code> — show formatted values on handles (matches default).</li>
                   <li><code>:clip="true"</code>, gradient <code>:colors</code>, <code>:prettify</code> — same as typical setup.</li>
+                  <li><code>v-model</code> — two-way <code>{ from, to }</code> binding (see script <code>standardRange</code>).</li>
                 </ul>
               </dd>
             </div>
@@ -26,12 +27,13 @@
               <dd>
                 Brush the histogram to narrow the domain; double-click the chart to reset when
                 <code>clip</code> is on. Grid ticks are on the slider strip below the SVG, not the histogram
-                bars.
+                bars. The bound range updates live via <code>update:modelValue</code>; <code>@range-updated</code> and <code>@range-reset</code> log separate code paths (brush/handle vs double-click home).
               </dd>
             </div>
           </dl>
         </header>
         <HistogramSlider
+          v-model="standardRange"
           type="double"
           :width="sliderWidth"
           :bar-height="110"
@@ -43,7 +45,8 @@
           :force-edges="false"
           :colors="['#4facfe', '#00f2fe']"
           :grid-num="2"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
 
@@ -87,7 +90,8 @@
           :force-edges="false"
           :colors="['#4facfe', '#00f2fe']"
           :grid-num="2"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
 
@@ -135,7 +139,8 @@
           :force-edges="false"
           :colors="['#4facfe', '#00f2fe']"
           :grid-num="4"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
 
@@ -188,7 +193,8 @@
           :force-edges="false"
           :colors="['#4facfe', '#00f2fe']"
           :grid-num="2"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
 
@@ -236,7 +242,8 @@
           :force-edges="false"
           :colors="gradientPurple"
           :grid-num="2"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
 
@@ -244,7 +251,7 @@
         <header class="histogram-demo__header">
           <h2 class="histogram-demo__title">Default Range - Single-handle</h2>
           <p class="histogram-demo__lede">
-            <code>defaultFrom</code> pins the initial handle to the middle of the dataset; double-click the
+            <code>defaultTo</code> pins the initial handle to the middle of the dataset; double-click the
             histogram to jump back there after you move it.
           </p>
           <dl class="histogram-demo__meta">
@@ -253,8 +260,8 @@
               <dd>
                 <ul class="histogram-demo__prop-list">
                   <li>
-                    <code>:default-from="(min + max) / 2"</code> — computed from the same timestamp series as
-                    the other demos.
+                    <code>:default-to="(min + max) / 2"</code> — computed from the same timestamp series as the
+                    other demos (single mode uses <code>defaultTo</code>, not <code>defaultFrom</code>).
                   </li>
                   <li>
                     Same layout as the earlier single example: <code>clip</code>, <code>grid-num="2"</code>,
@@ -277,14 +284,15 @@
           :width="sliderWidth"
           :bar-height="110"
           :data="data"
-          :default-from="demoDefaultSingleHalf"
+          :default-to="demoDefaultSingleHalf"
           :prettify="prettify"
           :clip="true"
           :hideFromTo="false"
           :force-edges="false"
           :colors="['#4facfe', '#00f2fe']"
           :grid-num="2"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
 
@@ -334,7 +342,8 @@
           :force-edges="false"
           :colors="['#4facfe', '#00f2fe']"
           :grid-num="2"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
 
@@ -384,7 +393,8 @@
           :hideFromTo="true"
           :force-edges="false"
           :colors="['#4facfe', '#00f2fe']"
-          @finish="finish"
+          @range-updated="logRangeUpdated"
+          @range-reset="logRangeReset"
         />
       </section>
     </div>
@@ -394,6 +404,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import HistogramSlider from './lib/HistogramSlider.vue'
+import type { RangeValues } from './lib/histogram-slider.types'
 import dataJson from '../resources/data.json'
 
 const SLIDER_MAX_WIDTH = 900
@@ -406,6 +417,8 @@ export default defineComponent({
   data() {
     return {
       sliderWidth: SLIDER_MAX_WIDTH,
+      /** Two-way range for the first (standard) demo — starts unset until the slider emits. */
+      standardRange: undefined as RangeValues | undefined,
       /** Warm purple ramp for the gradient-only demo */
       gradientPurple: ['#667eea', '#764ba2'],
       data: (dataJson as string[]).map((d) => new Date(d).valueOf()),
@@ -438,8 +451,12 @@ export default defineComponent({
   },
 
   methods: {
-    finish(val: { from: number; to: number }) {
-      console.log(val)
+    logRangeUpdated(val: { from: number; to: number }) {
+      console.log('rangeUpdated', val)
+    },
+
+    logRangeReset(val: { from: number; to: number }) {
+      console.log('rangeReset', val)
     },
 
     syncSliderWidth() {
