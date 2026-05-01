@@ -22,6 +22,12 @@ export default defineConfig({
     },
     rollupOptions: {
       external: ['vue'],
+      /** Keep Ion.RangeSlider jQuery plugin (`import './range-slider'`); see package.json `sideEffects`. */
+      treeshake: {
+        moduleSideEffects(id) {
+          return id.includes('range-slider') || id.endsWith('.css')
+        }
+      },
       output: {
         globals: {
           vue: 'Vue'

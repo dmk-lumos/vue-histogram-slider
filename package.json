@@ -18,12 +18,13 @@
     "dist"
   ],
   "sideEffects": [
-    "**/*.css"
+    "**/*.css",
+    "**/range-slider.ts"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oguzhaninan/vue-histogram-slider.git"
+    "url": "https://github.com/dmk-lumos/vue-histogram-slider.git"
   },
   "keywords": [
     "vue",

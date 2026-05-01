@@ -1,0 +1,44 @@
+# Publishes when a GitHub Release is published (not draft).
+#
+# Prerequisites:
+#   1. Bump package.json version and tag (e.g. v1.0.1) before creating the release.
+#   2. Repo secret NPM_TOKEN: npm "Automation" or "Granular access token" with publish permission.
+#      https://docs.npmjs.com/creating-and-viewing-access-tokens
+#
+# Optional: configure npm "Trusted Publisher" for this repo and OIDC so you can reduce reliance
+# on long-lived tokens (see https://docs.npmjs.com/trusted-publishers ).
+#
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish to npm
+        # prepublishOnly runs lint, typecheck, and build
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
