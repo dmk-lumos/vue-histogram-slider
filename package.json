@@ -34,7 +34,7 @@
     "histogram-slider"
   ],
   "peerDependencies": {
-    "vue": "^3.5.x"
+    "vue": "^3.4.0"
   },
   "dependencies": {
     "d3-array": "^3.2.4",
@@ -56,18 +56,18 @@
     "@eslint/js": "^9.39.4",
     "@typescript-eslint/eslint-plugin": "^8.18.2",
     "@typescript-eslint/parser": "^8.18.2",
-    "@vitejs/plugin-vue": "^6.0.6",
+    "@vitejs/plugin-vue": ">=5.2.0 <7",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-vue": "^9.32.0",
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
-    "typescript": "~5.7.2",
-    "vite": "8.0.5",
-    "vue": "^3.5.x",
+    "typescript": ">=5.4 <6",
+    "vite": ">=5.4.0 <9",
+    "vue": "^3.5.0",
     "vue-eslint-parser": "^10.4.0",
-    "vue-tsc": "^3.2.7"
+    "vue-tsc": ">=2.1.0 <4"
   },
   "scripts": {
     "dev": "vite",
