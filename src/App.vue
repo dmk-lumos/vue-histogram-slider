@@ -3,7 +3,7 @@
     <div class="histogram-demo">
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Double range, brush, interval drag</h2>
+          <h2 class="histogram-demo__title">Standard Histogram Slider - Range Selection</h2>
           <p class="histogram-demo__lede">
             Two handles on timestamp data with brush zoom on the chart and the option to drag the whole
             selected span on the track.
@@ -13,7 +13,7 @@
               <dt>Customizations</dt>
               <dd>
                 <ul class="histogram-demo__prop-list">
-                  <li><code>type="double"</code> — two-handle range (library default).</li>
+                  <li><code>type="double"</code> — two-handle range (default).</li>
                   <li><code>:drag-interval="true"</code> — drag both handles together (default is <code>false</code>).</li>
                   <li><code>:grid-num="2"</code> — two major divisions on the slider grid (default is <code>4</code>).</li>
                   <li><code>:hide-from-to="false"</code> — show formatted values on handles (matches default).</li>
@@ -49,7 +49,7 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Single-handle cutoff</h2>
+          <h2 class="histogram-demo__title">Single-handle Cutoff</h2>
           <p class="histogram-demo__lede">
             One thumb selects a single value on the same timeline; the histogram reflects single-handle
             colouring rules.
@@ -70,8 +70,8 @@
             <div class="histogram-demo__meta-row">
               <dt>Key features</dt>
               <dd>
-                Bins pick up colour on one side of the thumb only—the component treats single and double
-                ranges differently.
+                Drag toward earlier values to narrow from the high side of the axis. Double-click
+                resets when <code>clip</code> is on.
               </dd>
             </div>
           </dl>
@@ -93,7 +93,7 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Slider grid density</h2>
+          <h2 class="histogram-demo__title">Slider Grid Density</h2>
           <p class="histogram-demo__lede">
             Same double-handle setup as the first example; only the Ion.RangeSlider grid spacing changes so
             you can see what <code>gridNum</code> affects on the track.
@@ -141,7 +141,7 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Histogram bar density</h2>
+          <h2 class="histogram-demo__title">Bar Density</h2>
           <p class="histogram-demo__lede">
             Narrower, tighter-packed rects from <code>barWidth</code> and <code>barGap</code>; bin thresholds
             still follow chart width, but each bar draws thinner so more columns fit in view.
@@ -194,7 +194,7 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Bar colour gradient</h2>
+          <h2 class="histogram-demo__title">Bar Color Gradient Customizations</h2>
           <p class="histogram-demo__lede">
             The <code>colors</code> prop feeds a linear scale along the value axis—swap stops for a different
             ramp without touching D3 directly.
@@ -242,7 +242,105 @@
 
       <section class="histogram-demo__card">
         <header class="histogram-demo__header">
-          <h2 class="histogram-demo__title">Hidden handle labels &amp; imperative <code>update()</code></h2>
+          <h2 class="histogram-demo__title">Default Range - Single-handle</h2>
+          <p class="histogram-demo__lede">
+            <code>defaultFrom</code> pins the initial handle to the middle of the dataset; double-click the
+            histogram to jump back there after you move it.
+          </p>
+          <dl class="histogram-demo__meta">
+            <div class="histogram-demo__meta-row">
+              <dt>Customizations</dt>
+              <dd>
+                <ul class="histogram-demo__prop-list">
+                  <li>
+                    <code>:default-from="(min + max) / 2"</code> — computed from the same timestamp series as
+                    the other demos.
+                  </li>
+                  <li>
+                    Same layout as the earlier single example: <code>clip</code>, <code>grid-num="2"</code>,
+                    cyan gradient <code>colors</code>.
+                  </li>
+                </ul>
+              </dd>
+            </div>
+            <div class="histogram-demo__meta-row">
+              <dt>Key features</dt>
+              <dd>
+                Drag the thumb, then double-click the chart—selection returns to the midpoint default while the
+                domain resets to the full span.
+              </dd>
+            </div>
+          </dl>
+        </header>
+        <HistogramSlider
+          type="single"
+          :width="sliderWidth"
+          :bar-height="110"
+          :data="data"
+          :default-from="demoDefaultSingleHalf"
+          :prettify="prettify"
+          :clip="true"
+          :hideFromTo="false"
+          :force-edges="false"
+          :colors="['#4facfe', '#00f2fe']"
+          :grid-num="2"
+          @finish="finish"
+        />
+      </section>
+
+      <section class="histogram-demo__card">
+        <header class="histogram-demo__header">
+          <h2 class="histogram-demo__title">Default Range - Double-handle</h2>
+          <p class="histogram-demo__lede">
+            <code>defaultFrom</code> and <code>defaultTo</code> trim the initial selection to the middle third;
+            double-click restores that band after brush zoom or handle tweaks.
+          </p>
+          <dl class="histogram-demo__meta">
+            <div class="histogram-demo__meta-row">
+              <dt>Customizations</dt>
+              <dd>
+                <ul class="histogram-demo__prop-list">
+                  <li>
+                    <code>:default-from</code> / <code>:default-to</code> — one- and two-thirds along the data
+                    extent (<code>min + span/3</code> … <code>min + 2·span/3</code>).
+                  </li>
+                  <li>
+                    Matches the first double block for <code>drag-interval</code>, <code>grid-num="2"</code>,
+                    <code>clip</code>, and gradient colours.
+                  </li>
+                </ul>
+              </dd>
+            </div>
+            <div class="histogram-demo__meta-row">
+              <dt>Key features</dt>
+              <dd>
+                Brush to zoom, drag handles, then double-click—handles snap back to the ⅓–⅔ defaults on the
+                full timeline.
+              </dd>
+            </div>
+          </dl>
+        </header>
+        <HistogramSlider
+          type="double"
+          :width="sliderWidth"
+          :bar-height="110"
+          :data="data"
+          :default-from="demoDefaultDoubleFrom"
+          :default-to="demoDefaultDoubleTo"
+          :prettify="prettify"
+          :clip="true"
+          :drag-interval="true"
+          :hideFromTo="false"
+          :force-edges="false"
+          :colors="['#4facfe', '#00f2fe']"
+          :grid-num="2"
+          @finish="finish"
+        />
+      </section>
+
+      <section class="histogram-demo__card">
+        <header class="histogram-demo__header">
+          <h2 class="histogram-demo__title">Hidden handle labels, programmatic <code>update()</code></h2>
           <p class="histogram-demo__lede">
             Double range with minimal chrome on the track; after load the demo calls
             <code>update()</code> on a component ref to snap the selection—useful when restoring filters or
@@ -318,6 +416,24 @@ export default defineComponent({
           day: 'numeric'
         })
       }
+    }
+  },
+
+  computed: {
+    demoDataMin(): number {
+      return this.data.length ? Math.min(...this.data) : 0
+    },
+    demoDataMax(): number {
+      return this.data.length ? Math.max(...this.data) : 0
+    },
+    demoDefaultSingleHalf(): number {
+      return this.demoDataMin + (this.demoDataMax - this.demoDataMin) / 2
+    },
+    demoDefaultDoubleFrom(): number {
+      return this.demoDataMin + (this.demoDataMax - this.demoDataMin) / 3
+    },
+    demoDefaultDoubleTo(): number {
+      return this.demoDataMin + (2 * (this.demoDataMax - this.demoDataMin)) / 3
     }
   },
 

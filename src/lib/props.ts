@@ -11,6 +11,14 @@ export default {
   max: {
     type: Number
   },
+  /** With `defaultTo`, sets initial double range and dblclick reset on full domain. */
+  defaultFrom: {
+    type: Number
+  },
+  /** See `defaultFrom`. */
+  defaultTo: {
+    type: Number
+  },
   clip: {
     type: Boolean,
     default: true
