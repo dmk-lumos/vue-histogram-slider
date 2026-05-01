@@ -18,7 +18,6 @@ import $ from 'jquery'
 import './range-slider'
 import { defineComponent } from 'vue'
 import props from './props'
-import type { IonRangeSliderHandle } from '../types/jquery-ion-range-slider'
 import type { Selection } from 'd3-selection'
 import * as d3Scale from 'd3-scale'
 import * as d3Array from 'd3-array'
@@ -26,10 +25,9 @@ import * as d3Select from 'd3-selection'
 import 'd3-transition'
 import * as d3Brush from 'd3-brush'
 import type { D3BrushEvent } from 'd3-brush'
+import type { RangeValues } from './histogram-slider.types'
 
 let nextHistogramSliderUid = 0
-
-export type RangeValues = { from: number; to: number }
 
 function clampSelection(from: number, to: number, lo: number, hi: number): RangeValues {
   let f = Math.min(Math.max(from, lo), hi)
@@ -54,18 +52,39 @@ type JQueryIonRange = JQuery<HTMLElement> & {
   ionRangeSlider(_options?: Record<string, unknown>): JQuery<HTMLElement>
 }
 
+/** Narrow Ion.RangeSlider instance API without leaking path-dependent types into published `.d.ts`. */
+type IonRangeHandle = {
+  destroy(): void
+  update(opts: { from?: number; to?: number }): void
+  readonly result: { from: number; to: number }
+}
+
 export default defineComponent({
   name: 'HistogramSlider',
 
   props,
 
+  emits: {
+    'update:modelValue': (_v: RangeValues) => true,
+    /** Ion.RangeSlider `onStart`: user began moving a handle (not emitted during live `change`). */
+    dragStart: (_v: RangeValues) => true,
+    /** Ion.RangeSlider `onFinish`: user released a handle after dragging (not brush / double-click). */
+    dragEnd: (_v: RangeValues) => true,
+    /** Selection settled after handle release or brush zoom (not full-domain double-click reset). */
+    rangeUpdated: (_v: RangeValues) => true,
+    /** Full histogram domain restored via double-click (with `clip`); selection reset to defaults / full span. */
+    rangeReset: (_v: RangeValues) => true
+  },
+
   data(): {
     id: string
     histogramId: string
     clipId: string
-    ionRangeSlider: IonRangeSliderHandle | null
-    histSlider: JQuery<HTMLElement> | null
+    ionRangeSlider: IonRangeHandle | null
+    histSlider: unknown | null
     updateBarColor: ((_range: RangeValues) => void) | null
+    /** When true, Ion `onChange` / `onFinish` sync `v-model` (skips spurious initial plugin callbacks). */
+    emitReady: boolean
   } {
     const uid = ++nextHistogramSliderUid
     return {
@@ -74,7 +93,8 @@ export default defineComponent({
       clipId: `clip-${uid}`,
       ionRangeSlider: null,
       histSlider: null,
-      updateBarColor: null
+      updateBarColor: null,
+      emitReady: false
     }
   },
 
@@ -96,12 +116,51 @@ export default defineComponent({
     }
   },
 
+  watch: {
+    modelValue: {
+      deep: true,
+      handler(next?: RangeValues) {
+        if (!next || !this.ionRangeSlider) return
+        const cur = this.ionRangeSlider.result
+        if (cur.from === next.from && cur.to === next.to) return
+        this.ionRangeSlider.update({ from: next.from, to: next.to })
+        this.updateBarColor?.(next)
+      }
+    }
+  },
+
   methods: {
     update({ from, to }: RangeValues) {
       if (this.ionRangeSlider) {
         this.ionRangeSlider.update({ from, to })
         this.updateBarColor?.({ from, to })
+        this.$emit('update:modelValue', { from, to })
       }
+    },
+    /** Live `v-model` sync while dragging (no `dragEnd` / `rangeUpdated`). */
+    onSliderLive(val: RangeValues) {
+      if (!this.emitReady) return
+      const mv = this.modelValue
+      if (mv && mv.from === val.from && mv.to === val.to) return
+      this.$emit('update:modelValue', { ...val })
+    },
+    /** Ion `onFinish`: sync `v-model`, then `dragEnd` + `rangeUpdated` (handle interaction only). */
+    onIonHandleFinish(val: RangeValues) {
+      if (!this.emitReady) return
+      this.onSliderLive(val)
+      const payload = { ...val }
+      this.$emit('dragEnd', payload)
+      this.$emit('rangeUpdated', payload)
+    },
+    /** Brush zoom complete: `rangeUpdated` only (no `dragEnd`). */
+    emitRangeUpdated(val: RangeValues) {
+      if (!this.emitReady) return
+      this.$emit('rangeUpdated', { ...val })
+    },
+    /** Double-click cleared zoom to full data domain; emits `rangeReset` (not `rangeUpdated`). */
+    emitRangeReset(val: RangeValues) {
+      if (!this.emitReady) return
+      this.$emit('rangeReset', { ...val })
     }
   },
 
@@ -115,7 +174,7 @@ export default defineComponent({
     const domainTuple = (lo: number, hi: number): [number, number] => [lo, hi]
 
     /**
-     * Single without custom defaultFrom: Ion.RangeSlider paints the track from min → handle, so highlighted
+     * Single without custom `defaultTo`: Ion.RangeSlider paints the track from min → handle, so highlighted
      * bins use `x0 < from`; handle starts at domain max so the whole series is included initially.
      */
     const singleSelectAllRange = (_lo: number, hi: number): RangeValues => ({ from: hi, to: hi })
@@ -124,8 +183,8 @@ export default defineComponent({
       if (!isTypeSingle && typeof this.defaultFrom === 'number' && typeof this.defaultTo === 'number') {
         return clampSelection(this.defaultFrom, this.defaultTo, lo, hi)
       }
-      if (isTypeSingle && typeof this.defaultFrom === 'number') {
-        return { from: Math.min(Math.max(this.defaultFrom, lo), hi), to: hi }
+      if (isTypeSingle && typeof this.defaultTo === 'number') {
+        return { from: Math.min(Math.max(this.defaultTo, lo), hi), to: hi }
       }
       if (isTypeSingle) {
         return singleSelectAllRange(lo, hi)
@@ -135,9 +194,9 @@ export default defineComponent({
 
     const initialRangeForDomain = (domainMin: number, domainMax: number): RangeValues => {
       const zoomed = domainMin !== min || domainMax !== max
-      if (zoomed && isTypeSingle && typeof this.defaultFrom === 'number') {
+      if (zoomed && isTypeSingle && typeof this.defaultTo === 'number') {
         return {
-          from: Math.min(Math.max(this.defaultFrom, domainMin), domainMax),
+          from: Math.min(Math.max(this.defaultTo, domainMin), domainMax),
           to: domainMax
         }
       }
@@ -146,6 +205,10 @@ export default defineComponent({
       }
       if (zoomed) {
         return { from: domainMin, to: domainMax }
+      }
+      const mv = this.modelValue
+      if (mv && typeof mv.from === 'number' && typeof mv.to === 'number') {
+        return clampSelection(mv.from, mv.to, domainMin, domainMax)
       }
       return resetRangeToExtent(domainMin, domainMax)
     }
@@ -195,8 +258,7 @@ export default defineComponent({
         updateHistogram([min, max])
         const pos = resetRangeToExtent(min, max)
         this.update(pos)
-        this.$emit('finish', pos)
-        this.$emit('change', pos)
+        this.emitRangeReset(pos)
       })
 
     hist = svg.append('g').attr('class', 'histogram')
@@ -271,31 +333,31 @@ export default defineComponent({
         keyboard: this.keyboard,
         prettify: this.prettify,
         onStart: (val: RangeValues) => {
-          this.$emit('start', val)
-        },
-        onUpdate: (val: RangeValues) => {
-          this.$emit('update', val)
+          if (this.emitReady) {
+            this.$emit('dragStart', { ...val })
+          }
         },
         onFinish: (val: RangeValues) => {
           if (!this.updateColorOnChange) {
             this.updateBarColor?.(val)
           }
-          this.$emit('finish', val)
+          this.onIonHandleFinish(val)
         },
         onChange: (val: RangeValues) => {
           if (this.updateColorOnChange) {
             this.updateBarColor?.(val)
           }
-          this.$emit('change', val)
+          this.onSliderLive(val)
         }
       })
 
-      this.ionRangeSlider = this.histSlider!.data('ionRangeSlider') as IonRangeSliderHandle
+      this.ionRangeSlider = (this.histSlider as JQueryIonRange).data('ionRangeSlider') as IonRangeHandle
 
       setTimeout(() => {
         if (this.ionRangeSlider && this.updateBarColor) {
           this.updateBarColor(this.ionRangeSlider.result)
         }
+        this.emitReady = true
       }, this.transitionDuration + 10)
     }
 
@@ -305,15 +367,15 @@ export default defineComponent({
         if (extent && extent.length === 2 && this.ionRangeSlider && brushBehavior) {
           const domain = [x.invert(extent[0]), x.invert(extent[1])] as [number, number]
           x.domain(domain)
-          const pos = {
-            from: Math.max(domain[0], this.ionRangeSlider.result.from),
-            to: Math.min(domain[1], this.ionRangeSlider.result.to)
-          }
-          this.$emit('finish', pos)
-          this.$emit('change', pos)
-
           updateHistogram(domain)
           hist.call(brushBehavior.clear)
+          setTimeout(() => {
+            if (this.ionRangeSlider) {
+              const val = this.ionRangeSlider.result
+              this.onSliderLive(val)
+              this.emitRangeUpdated(val)
+            }
+          }, this.transitionDuration + 10)
         }
       })
       hist.call(brushBehavior)

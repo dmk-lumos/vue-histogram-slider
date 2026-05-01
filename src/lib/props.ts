@@ -1,4 +1,5 @@
 import type { PropType } from 'vue'
+import type { RangeValues } from './histogram-slider.types'
 
 export default {
   data: {
@@ -11,13 +12,15 @@ export default {
   max: {
     type: Number
   },
-  /** With `defaultTo`, sets initial double range and dblclick reset on full domain. */
   defaultFrom: {
     type: Number
   },
-  /** See `defaultFrom`. */
   defaultTo: {
     type: Number
+  },
+  modelValue: {
+    type: Object as PropType<RangeValues | undefined>,
+    default: undefined
   },
   clip: {
     type: Boolean,

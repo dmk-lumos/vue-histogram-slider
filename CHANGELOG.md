@@ -1,80 +1,29 @@
-# ChangeLog
+# Changelog
 
-## v1.0.0
+All notable changes to this project are documented in this file.
 
-Summary of changes since **v0.3.5** (major toolchain and API refresh).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-### Breaking changes
+## 1.0.0 — 2026-04-30
 
-- **Vue 3 only** — drops Vue 2 / `@vue/cli` / Babel app wiring; peer dependency is **Vue 3.x.
-- **Build system** — **Vite** library build instead of Vue CLI; consume **`dist/histogram-slider.mjs`** / **`.umd.min.js`** and **`histogram-slider.css`** per `package.json` `exports` (see README).
-- **Package manager** — **npm** and **`package-lock.json`** replace Yarn / `yarn.lock`.
-- **Ion.RangeSlider asset** — vendored plugin lives as **`src/lib/range-slider.ts`** (ESM-friendly wrapper).
+First stable release of **vue-histogram-slider** from this repository: **Vue 3** component, TypeScript types, Vite library build, and documented public API.
 
 ### Added
 
-- **Default range props** — optional **`defaultFrom`** / **`defaultTo`**: set initial selection on the full domain; with **`clip`**, **double-click** on the histogram resets to that default (double needs both; single uses **`defaultFrom`**). If omitted, behaviour matches the previous full-span defaults.
-- **TypeScript** across `HistogramSlider`, props, demo app, and **`src/types/jquery-ion-range-slider.d.ts`**.
-- **Demo page** (`App.vue`) — multiple cards documenting props (grid, bar width/gap, gradients, default ranges, programmatic `update()`, etc.).
-- **`prepare`** script (runs **`build`**) so the package can be installed from **git**.
-- **PostCSS** config as **`postcss.config.cjs`** for ESM **`"type": "module"`** compatibility.
-- **ESLint 9** flat entrypoint **`eslint.config.js`** (wraps legacy **`.eslintrc.cjs`** via `@eslint/eslintrc` FlatCompat).
-- **`scripts/rename-lib-css.mjs`** — normalizes built CSS filename for published **`exports`**.
+- **HistogramSlider** — range control with D3 histogram, optional **brush zoom** and **double-click** full-domain reset when **`clip`** is enabled.
+- **`v-model` / `modelValue`** — two-way `{ from, to }` in the same numeric space as **`data`** (and optional **`min`** / **`max`**).
+- **Events** — **`dragStart`** / **`dragEnd`** (Ion.RangeSlider handle lifecycle), **`rangeUpdated`** (handle commit or brush zoom), **`rangeReset`** (double-click restores full domain). Live values use **`update:modelValue`**.
+- **Defaults / reset anchors** — **`defaultFrom`** + **`defaultTo`** for **double** sliders; **`defaultTo`** alone anchors the **single** handle (initial + double-click reset). **`defaultFrom` is ignored when `type` is `single`** (use **`defaultTo`** instead). See type JSDoc.
+- **TypeScript** — published **`dist/histogram-slider.d.ts`** with **`RangeValues`**, **`HistogramSliderPublicProps`**, **`HistogramSliderEmits`**; re-exported from the package entry.
+- **Build & packaging** — Vite ESM (`.mjs`) and UMD bundles, **`exports`** map (including **`vue-histogram-slider/histogram-slider.css`**), **`prepare`** runs **`build`** for git installs.
+- **Demo** — `App.vue` gallery covering props, gradients, programmatic **`update()`**, and event logging.
 
-### Changed
+### Technical notes
 
-- **Single-handle histogram highlighting** — bins follow the same rule as Ion’s single track (**`x0 < from`**), with the handle starting at the **domain maximum** so the full series is highlighted by default (aligned with “select all” / track fill direction).
-- **D3 v3 / brush** — brush **`end`** handler uses **`D3BrushEvent.selection`** (D3 v6+); removes reliance on removed global **`d3-selection` `event`** (fixes bundler warnings).
-- **LICENSE** — **`package.json`** **license** field aligned with repository **MIT** (was incorrectly **GPL-3.0** upstream).
-- **README** — usage notes for Vue 3, install, and peers.
+- **Ion.RangeSlider** is vendored for ESM (`src/lib/range-slider.ts`) with **jQuery** as a runtime dependency.
+- **D3** v6+ modules for scales, bins, brush, and transitions; brush uses **`D3BrushEvent.selection`** (no legacy global `d3.event`).
+- **ESLint 9** flat config, **vue-tsc** typecheck, **Prettier**-compatible formatting.
 
-### Fixed
+### Lineage
 
-- **`grid_num`** passed correctly through to Ion.RangeSlider (#27).
-- **Brush / clip events** — typo **`form` → `from`** in emitted range payload (#9).
-- Various runtime issues addressed in history between tags: **multi-slider**, **`update`**, **jQuery `window`**, **jquery window issue**, **hist** colouring / clip behaviour (see commits on default branch).
-- **Removed generate random id** (stable IDs via counter).
-
-### Maintenance
-
-- **Dependabot** — numerous **transitive** dependency bumps (e.g. **lodash**, **elliptic**, **ini**, **url-parse**, **browserslist**, **ws**, **tar**, **dns-packet**, **jquery** 3.5+, **highlight.js**, **http-proxy**, **follow-redirects**, etc.) for security and compatibility while still on the Vue 2 toolchain.
-- **Prettier** config added; **MIT** license text / badge clean-up.
-- **1.0.0 release commit** — D3, Vite, ESLint, TypeScript, Vue, **`vue-tsc`**, and related dev deps refreshed toward current majors/minors.
-
-## v0.3.5
-
-### New Features
-- Added handle size prop
-
-## v0.3.3
-
-### Bug Fix
-- Fixed hist color issue
-
-## v0.3.2
-
-### Bug Fix
-- Performance improvements
-
-## v0.3.1
-
-### Bug Fix
-- Histogram clip issue fixed
-
-## v0.3.0
-
-### New Features
-- Add histogram clip
-
-## v0.2.1
-
-### Bug Fix
-- First and lash histogram bar color not change problem fixed
-
-## v0.2.0
-
-### New Features
-- `min`, `max` props are not required
-- `type` 'single' option is completed
-
-## v0.1.0
+Earlier **0.x** releases on npm under the name **`vue-histogram-slider`** came from a different repository and stack (Vue 2). **1.0.0** is the first release from **[dmk-lumos/vue-histogram-slider](https://github.com/dmk-lumos/vue-histogram-slider)**; treat it as a new baseline, not a drop-in continuation of those tags.
