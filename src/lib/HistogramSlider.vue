@@ -25,16 +25,9 @@ import * as d3Array from 'd3-array'
 import * as d3Select from 'd3-selection'
 import 'd3-transition'
 import * as d3Brush from 'd3-brush'
+import type { D3BrushEvent } from 'd3-brush'
 
 let nextHistogramSliderUid = 0
-
-/** d3-selection v1 + d3-brush expose the active gesture on `selection.event`. */
-function getD3BrushSelection(): [number, number] | null {
-  const ns = d3Select as typeof d3Select & {
-    event?: { selection: [number, number] | null }
-  }
-  return ns.event?.selection ?? null
-}
 
 export type RangeValues = { from: number; to: number }
 
@@ -307,9 +300,9 @@ export default defineComponent({
     }
 
     if (this.clip) {
-      brushBehavior = d3Brush.brushX().on('end', () => {
-        const extent = getD3BrushSelection()
-        if (extent && this.ionRangeSlider && brushBehavior) {
+      brushBehavior = d3Brush.brushX().on('end', (event: D3BrushEvent<unknown>) => {
+        const extent = event.selection as [number, number] | null
+        if (extent && extent.length === 2 && this.ionRangeSlider && brushBehavior) {
           const domain = [x.invert(extent[0]), x.invert(extent[1])] as [number, number]
           x.domain(domain)
           const pos = {
