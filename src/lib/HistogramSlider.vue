@@ -40,6 +40,45 @@ function clampSelection(from: number, to: number, lo: number, hi: number): Range
   return { from: f, to: t }
 }
 
+/** Ion `onFinish` without a matching handle `pointerup` (e.g. keyboard-only). */
+function syntheticFinishPointerEvent(): PointerEvent {
+  return new PointerEvent('finish', {
+    bubbles: false,
+    cancelable: false,
+    pointerId: -1,
+    pointerType: '',
+    clientX: 0,
+    clientY: 0
+  })
+}
+
+/** Prefer browser `PointerEvent` from jQuery; rare fallbacks use a minimal synthetic. */
+function coerceSliderPointerDown(e: JQuery.TriggeredEvent): PointerEvent {
+  const oe = e.originalEvent
+  if (oe instanceof PointerEvent) return oe
+  const me = e as unknown as MouseEvent
+  return new PointerEvent('pointerdown', {
+    bubbles: e.bubbles,
+    cancelable: e.cancelable,
+    pointerId: 0,
+    pointerType: 'mouse',
+    clientX: typeof me.clientX === 'number' ? me.clientX : 0,
+    clientY: typeof me.clientY === 'number' ? me.clientY : 0
+  })
+}
+
+function coercePointerUp(up: Event): PointerEvent {
+  if (up instanceof PointerEvent) return up
+  return new PointerEvent('pointerup', {
+    bubbles: false,
+    cancelable: false,
+    pointerId: -1,
+    pointerType: '',
+    clientX: 0,
+    clientY: 0
+  })
+}
+
 type BinDatum = { x0: number; length: number }
 
 /** Root SVG we draw the histogram into (parent in the DOM is HTML). */
@@ -67,9 +106,9 @@ export default defineComponent({
   emits: {
     'update:modelValue': (_v: RangeValues) => true,
     /** User pressed a handle (or drag-interval bar); pairs with `dragEnd` / Ion `onFinish`. */
-    dragStart: (_v: RangeValues) => true,
-    /** Ion.RangeSlider `onFinish`: user released a handle after dragging (not brush / double-click). */
-    dragEnd: (_v: RangeValues) => true,
+    dragStart: (_e: PointerEvent) => true,
+    /** Ion.RangeSlider `onFinish`: `(pointerup | synthetic finish, range values)`. */
+    dragEnd: (_e: PointerEvent, _v: RangeValues) => true,
     /** Selection settled after handle release or brush zoom (not full-domain double-click reset). */
     rangeUpdated: (_v: RangeValues) => true,
     /** Full histogram domain restored via double-click (with `clip`); selection reset to defaults / full span. */
@@ -85,6 +124,9 @@ export default defineComponent({
     updateBarColor: ((_range: RangeValues) => void) | null
     /** When true, Ion `onChange` / `onFinish` sync `v-model` (skips spurious initial plugin callbacks). */
     emitReady: boolean
+    /** Next `pointerup` after handle press, consumed by Ion `onFinish` for `dragEnd`’s event arg. */
+    ionDragFinishEvent: PointerEvent | null
+    ionDragFinishPointerUpHandler: EventListener | null
   } {
     const uid = ++nextHistogramSliderUid
     return {
@@ -94,7 +136,9 @@ export default defineComponent({
       ionRangeSlider: null,
       histSlider: null,
       updateBarColor: null,
-      emitReady: false
+      emitReady: false,
+      ionDragFinishEvent: null,
+      ionDragFinishPointerUpHandler: null
     }
   },
 
@@ -149,7 +193,9 @@ export default defineComponent({
       if (!this.emitReady) return
       this.onSliderLive(val)
       const payload = { ...val }
-      this.$emit('dragEnd', payload)
+      const finishEv = this.ionDragFinishEvent ?? syntheticFinishPointerEvent()
+      this.ionDragFinishEvent = null
+      this.$emit('dragEnd', finishEv, payload)
       this.$emit('rangeUpdated', payload)
     },
     /** Brush zoom complete: `rangeUpdated` only (no `dragEnd`). */
@@ -185,10 +231,22 @@ export default defineComponent({
 
       $irs.on(`pointerdown.vueHistSliderDrag`, selector, (e: JQuery.TriggeredEvent) => {
         if (!this.emitReady || !this.ionRangeSlider) return
-        const pe = e.originalEvent as PointerEvent | undefined
-        if (pe && pe.pointerType === 'mouse' && pe.button === 2) return
-        const r = this.ionRangeSlider.result
-        this.$emit('dragStart', { from: r.from, to: r.to })
+        const pe = e.originalEvent
+        if (pe instanceof PointerEvent && pe.pointerType === 'mouse' && pe.button === 2) return
+        if (this.ionDragFinishPointerUpHandler) {
+          document.removeEventListener('pointerup', this.ionDragFinishPointerUpHandler, true)
+          this.ionDragFinishPointerUpHandler = null
+        }
+        this.ionDragFinishEvent = null
+        const domEv = coerceSliderPointerDown(e)
+        this.$emit('dragStart', domEv)
+        const onUp: EventListener = (up) => {
+          document.removeEventListener('pointerup', onUp, true)
+          this.ionDragFinishPointerUpHandler = null
+          this.ionDragFinishEvent = coercePointerUp(up)
+        }
+        this.ionDragFinishPointerUpHandler = onUp
+        document.addEventListener('pointerup', onUp, true)
       })
     }
   },
@@ -413,6 +471,10 @@ export default defineComponent({
     $(`#${this.histogramId}`)
       .prev('.irs')
       .off('.vueHistSliderDrag')
+    if (this.ionDragFinishPointerUpHandler) {
+      document.removeEventListener('pointerup', this.ionDragFinishPointerUpHandler, true)
+      this.ionDragFinishPointerUpHandler = null
+    }
     if (this.ionRangeSlider) {
       this.ionRangeSlider.destroy()
     }

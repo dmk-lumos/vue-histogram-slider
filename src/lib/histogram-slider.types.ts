@@ -166,11 +166,12 @@ export interface HistogramSliderPublicProps {
  * Emitted custom events for the default export component (templates use kebab-case:
  * `@update:model-value`, `@drag-start`, `@drag-end`, `@range-updated`, `@range-reset`).
  *
- * **`dragStart` / `dragEnd`** — **`dragStart`** fires on **pointer-down** on Ion’s interactive surface
- * (handles, labels, line, bar, shadows) so it pairs with **`dragEnd`** from Ion’s **`onFinish`**.
- * They do **not** fire for histogram **brush** zoom or **double‑click** domain reset. Live values use
- * **`update:modelValue`** (Ion `onChange`). Keyboard nudges may call **`onFinish`** without a preceding
- * **`dragStart`** (Ion never signals a real “press” for keys).
+ * **`dragStart` / `dragEnd`** — **`dragStart`** emits the **`PointerEvent`** from **pointer-down** on Ion’s
+ * interactive surface (handles, labels, line, bar, shadows). **`dragEnd`** emits **`(event, values)`**:
+ * the matching **`pointerup`** `PointerEvent` when available, otherwise a synthetic **`PointerEvent`**
+ * (type **`finish`**) for keyboard **`onFinish`** without a prior handle press. They do **not** fire for histogram **brush** zoom or
+ * **double‑click** domain reset. Live values use **`update:modelValue`** (Ion `onChange`). Keyboard
+ * nudges may call **`onFinish`** without a preceding **`dragStart`** (Ion never signals a real “press” for keys).
  *
  * **`rangeUpdated`** fires when the **selection** settles after a **handle** release (with `dragEnd`)
  * or after **brush** zoom into a narrower domain. It does **not** fire on double‑click full-domain
@@ -183,8 +184,8 @@ export interface HistogramSliderPublicProps {
  */
 export interface HistogramSliderEmits {
   'update:modelValue': RangeValues
-  dragStart: RangeValues
-  dragEnd: RangeValues
+  dragStart: PointerEvent
+  dragEnd: [PointerEvent, RangeValues]
   rangeUpdated: RangeValues
   rangeReset: RangeValues
 }
