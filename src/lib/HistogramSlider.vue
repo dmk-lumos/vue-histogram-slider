@@ -66,7 +66,7 @@ export default defineComponent({
 
   emits: {
     'update:modelValue': (_v: RangeValues) => true,
-    /** Ion.RangeSlider `onStart`: user began moving a handle (not emitted during live `change`). */
+    /** User pressed a handle (or drag-interval bar); pairs with `dragEnd` / Ion `onFinish`. */
     dragStart: (_v: RangeValues) => true,
     /** Ion.RangeSlider `onFinish`: user released a handle after dragging (not brush / double-click). */
     dragEnd: (_v: RangeValues) => true,
@@ -161,6 +161,35 @@ export default defineComponent({
     emitRangeReset(val: RangeValues) {
       if (!this.emitReady) return
       this.$emit('rangeReset', { ...val })
+    },
+    /**
+     * Ion 2.3.1’s `onStart` runs only on first `init`, not on user press — delegate `pointerdown` on the
+     * slider surface so `dragStart` pairs with Ion `onFinish` / `dragEnd` (handles, labels, line, bar, shadows).
+     */
+    bindIonDragStartEmitter() {
+      const $input = $(`#${this.histogramId}`) as JQuery<HTMLElement>
+      const $irs = $input.prev('.irs')
+      $irs.off('.vueHistSliderDrag')
+      if (!$irs.length || !this.ionRangeSlider) return
+
+      const selectorParts = [
+        '.irs-handle',
+        '.irs-from',
+        '.irs-to',
+        '.irs-single',
+        '.irs-line',
+        '.irs-bar',
+        '.irs-shadow'
+      ]
+      const selector = selectorParts.join(', ')
+
+      $irs.on(`pointerdown.vueHistSliderDrag`, selector, (e: JQuery.TriggeredEvent) => {
+        if (!this.emitReady || !this.ionRangeSlider) return
+        const pe = e.originalEvent as PointerEvent | undefined
+        if (pe && pe.pointerType === 'mouse' && pe.button === 2) return
+        const r = this.ionRangeSlider.result
+        this.$emit('dragStart', { from: r.from, to: r.to })
+      })
     }
   },
 
@@ -332,11 +361,6 @@ export default defineComponent({
         block: this.block,
         keyboard: this.keyboard,
         prettify: this.prettify,
-        onStart: (val: RangeValues) => {
-          if (this.emitReady) {
-            this.$emit('dragStart', { ...val })
-          }
-        },
         onFinish: (val: RangeValues) => {
           if (!this.updateColorOnChange) {
             this.updateBarColor?.(val)
@@ -352,6 +376,7 @@ export default defineComponent({
       })
 
       this.ionRangeSlider = (this.histSlider as JQueryIonRange).data('ionRangeSlider') as IonRangeHandle
+      this.bindIonDragStartEmitter()
 
       setTimeout(() => {
         if (this.ionRangeSlider && this.updateBarColor) {
@@ -385,6 +410,9 @@ export default defineComponent({
   },
 
   unmounted() {
+    $(`#${this.histogramId}`)
+      .prev('.irs')
+      .off('.vueHistSliderDrag')
     if (this.ionRangeSlider) {
       this.ionRangeSlider.destroy()
     }

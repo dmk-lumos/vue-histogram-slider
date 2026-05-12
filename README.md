@@ -118,7 +118,7 @@ Use **`v-model`** (or `v-model:modelValue`) with `{ from, to }` for two-way rang
 | Name | When it fires |
 |------|----------------|
 | `update:modelValue` | Range values change (live handle drag, brush / reset, or imperative `update()`). Not fired on the very first paint before the slider is ready. |
-| `dragStart` | **Ion.RangeSlider `onStart` only** — user begins moving a handle. Not per-frame; not for brush or double-click. |
+| `dragStart` | User **pointer-down** on any Ion control that can end with **`dragEnd`**: handles, from/to/single labels, track line, bar, or shadow spans. Not per-frame; not brush or double-click on the histogram. |
 | `dragEnd` | **Ion.RangeSlider `onFinish` only** — user releases the handle after a drag. Not emitted for brush zoom or double-click reset. |
 | `rangeUpdated` | Selection settled after **handle** release (with `dragEnd`) or **brush** zoom. Not double-click full-domain reset. |
 | `rangeReset` | **Double-click** restored the full histogram domain (`clip`); selection reset to defaults / full span. |
