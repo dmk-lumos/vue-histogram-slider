@@ -40,6 +40,14 @@ function clampSelection(from: number, to: number, lo: number, hi: number): Range
   return { from: f, to: t }
 }
 
+/** Clamp handles into the current zoom window; single mode keeps `to` at the view max. */
+function clampRangeToView(val: RangeValues, lo: number, hi: number, single: boolean): RangeValues {
+  if (single) {
+    return { from: Math.min(Math.max(val.from, lo), hi), to: hi }
+  }
+  return clampSelection(val.from, val.to, lo, hi)
+}
+
 /** Ion `onFinish` without a matching handle `pointerup` (e.g. keyboard-only). */
 function syntheticFinishPointerEvent(): PointerEvent {
   return new PointerEvent('finish', {
@@ -127,6 +135,8 @@ export default defineComponent({
     /** Next `pointerup` after handle press, consumed by Ion `onFinish` for `dragEnd`’s event arg. */
     ionDragFinishEvent: PointerEvent | null
     ionDragFinishPointerUpHandler: EventListener | null
+    /** Set in `mounted`: redraw while keeping `x` zoom domain and clamping handles into view. */
+    chartPreserveZoomRedraw: (() => void) | null
   } {
     const uid = ++nextHistogramSliderUid
     return {
@@ -138,7 +148,8 @@ export default defineComponent({
       updateBarColor: null,
       emitReady: false,
       ionDragFinishEvent: null,
-      ionDragFinishPointerUpHandler: null
+      ionDragFinishPointerUpHandler: null,
+      chartPreserveZoomRedraw: null
     }
   },
 
@@ -161,6 +172,14 @@ export default defineComponent({
   },
 
   watch: {
+    data: {
+      handler() {
+        this.chartPreserveZoomRedraw?.()
+      }
+    },
+    type() {
+      this.chartPreserveZoomRedraw?.()
+    },
     modelValue: {
       deep: true,
       handler(next?: RangeValues) {
@@ -252,11 +271,13 @@ export default defineComponent({
   },
 
   mounted() {
-    const series: number[] = this.data ?? []
     const width = this.width - 20
-    const min = this.min ?? d3Array.min(series) ?? 0
-    const max = this.max ?? d3Array.max(series) ?? 0
-    const isTypeSingle = this.type === 'single'
+
+    /** Current `data` series; refreshed from props on every histogram rebuild. */
+    let series: number[] = this.data ?? []
+    /** Full-span extent from props + `data` (double-click reset target); updated when `data` changes. */
+    let fullMin = this.min ?? d3Array.min(series) ?? 0
+    let fullMax = this.max ?? d3Array.max(series) ?? 0
 
     const domainTuple = (lo: number, hi: number): [number, number] => [lo, hi]
 
@@ -267,27 +288,43 @@ export default defineComponent({
     const singleSelectAllRange = (_lo: number, hi: number): RangeValues => ({ from: hi, to: hi })
 
     const resetRangeToExtent = (lo: number, hi: number): RangeValues => {
-      if (!isTypeSingle && typeof this.defaultFrom === 'number' && typeof this.defaultTo === 'number') {
+      const single = this.type === 'single'
+      if (!single && typeof this.defaultFrom === 'number' && typeof this.defaultTo === 'number') {
         return clampSelection(this.defaultFrom, this.defaultTo, lo, hi)
       }
-      if (isTypeSingle && typeof this.defaultTo === 'number') {
+      if (single && typeof this.defaultTo === 'number') {
         return { from: Math.min(Math.max(this.defaultTo, lo), hi), to: hi }
       }
-      if (isTypeSingle) {
+      if (single) {
         return singleSelectAllRange(lo, hi)
       }
       return { from: lo, to: hi }
     }
 
+    const syncSeriesAndFullExtent = () => {
+      series = this.data ?? []
+      fullMin = this.min ?? d3Array.min(series) ?? 0
+      fullMax = this.max ?? d3Array.max(series) ?? 0
+      if (this.colors) {
+        colors = d3Scale
+          .scaleLinear<string>()
+          .domain(domainTuple(fullMin, fullMax))
+          .range(this.colors)
+      } else {
+        colors = () => this.primaryColor
+      }
+    }
+
     const initialRangeForDomain = (domainMin: number, domainMax: number): RangeValues => {
-      const zoomed = domainMin !== min || domainMax !== max
-      if (zoomed && isTypeSingle && typeof this.defaultTo === 'number') {
+      const zoomed = domainMin !== fullMin || domainMax !== fullMax
+      const single = this.type === 'single'
+      if (zoomed && single && typeof this.defaultTo === 'number') {
         return {
           from: Math.min(Math.max(this.defaultTo, domainMin), domainMax),
           to: domainMax
         }
       }
-      if (zoomed && isTypeSingle) {
+      if (zoomed && single) {
         return singleSelectAllRange(domainMin, domainMax)
       }
       if (zoomed) {
@@ -319,14 +356,16 @@ export default defineComponent({
       barsLayer
         .selectAll<SVGRectElement, BinDatum>(`.vue-histogram-slider-bar-${this.id}`)
         .attr('fill', (d) => {
-          if (isTypeSingle) {
+          if (this.type === 'single') {
             return d.x0 < val.from ? colors(d.x0) : this.holderColor
           }
           return d.x0 <= val.to && d.x0 >= val.from ? colors(d.x0) : this.holderColor
         })
     }
 
-    x = d3Scale.scaleLinear().domain(domainTuple(min, max)).range([0, width]).clamp(true)
+    syncSeriesAndFullExtent()
+
+    x = d3Scale.scaleLinear().domain(domainTuple(fullMin, fullMax)).range([0, width]).clamp(true)
 
     y = d3Scale.scaleLinear().range([this.barHeight, 0])
 
@@ -338,12 +377,12 @@ export default defineComponent({
         if (!this.clip) {
           return
         }
-        x.domain(domainTuple(min, max))
+        x.domain(domainTuple(fullMin, fullMax))
         if (brushBehavior) {
           hist.call(brushBehavior.clear)
         }
-        updateHistogram([min, max])
-        const pos = resetRangeToExtent(min, max)
+        updateHistogram([fullMin, fullMax])
+        const pos = resetRangeToExtent(fullMin, fullMax)
         this.update(pos)
         this.emitRangeReset(pos)
       })
@@ -355,16 +394,10 @@ export default defineComponent({
       hist.attr('clip-path', `url(#${this.clipId})`)
     }
 
-    if (this.colors) {
-      colors = d3Scale
-        .scaleLinear<string>()
-        .domain(domainTuple(min, max))
-        .range(this.colors)
-    } else {
-      colors = () => this.primaryColor
-    }
+    const updateHistogram = ([domainMin, domainMax]: [number, number], preserveZoomSelection = false) => {
+      this.emitReady = false
+      syncSeriesAndFullExtent()
 
-    const updateHistogram = ([domainMin, domainMax]: [number, number]) => {
       barsLayer.selectAll(`.vue-histogram-slider-bar-${this.id}`).remove()
 
       const xDom = x.domain()
@@ -389,16 +422,24 @@ export default defineComponent({
         .attr('rx', this.barRadius)
         .attr('width', this.barWidth)
         .attr('height', 0)
-        .attr('fill', (d) => (isTypeSingle ? this.holderColor : colors(d.x0)))
+        .attr('fill', (d) => (this.type === 'single' ? this.holderColor : colors(d.x0)))
         .transition()
         .duration(this.transitionDuration)
         .attr('height', (d: BinDatum) => Math.max(0, this.barHeight - y(d.length)))
 
+      const sliderRange =
+        preserveZoomSelection && this.ionRangeSlider
+          ? clampRangeToView(
+              this.ionRangeSlider.result,
+              domainMin,
+              domainMax,
+              this.type === 'single'
+            )
+          : initialRangeForDomain(domainMin, domainMax)
+
       if (this.ionRangeSlider) {
         this.ionRangeSlider.destroy()
       }
-
-      const sliderRange = initialRangeForDomain(domainMin, domainMax)
 
       this.histSlider = ($(`#${this.histogramId}`) as JQueryIonRange).ionRangeSlider({
         skin: 'round',
@@ -436,12 +477,27 @@ export default defineComponent({
       this.ionRangeSlider = (this.histSlider as JQueryIonRange).data('ionRangeSlider') as IonRangeHandle
       this.bindIonDragStartEmitter()
 
+      if (preserveZoomSelection) {
+        const mv = this.modelValue
+        if (!mv || mv.from !== sliderRange.from || mv.to !== sliderRange.to) {
+          this.$emit('update:modelValue', { ...sliderRange })
+        }
+      }
+
       setTimeout(() => {
         if (this.ionRangeSlider && this.updateBarColor) {
           this.updateBarColor(this.ionRangeSlider.result)
         }
         this.emitReady = true
       }, this.transitionDuration + 10)
+    }
+
+    this.chartPreserveZoomRedraw = () => {
+      if (!this.ionRangeSlider) return
+      const d = x.domain()
+      const lo = Math.min(d[0], d[1])
+      const hi = Math.max(d[0], d[1])
+      updateHistogram([lo, hi], true)
     }
 
     if (this.clip) {
@@ -464,7 +520,7 @@ export default defineComponent({
       hist.call(brushBehavior)
     }
 
-    updateHistogram([min, max])
+    updateHistogram([fullMin, fullMax])
   },
 
   unmounted() {
@@ -478,6 +534,7 @@ export default defineComponent({
     if (this.ionRangeSlider) {
       this.ionRangeSlider.destroy()
     }
+    this.chartPreserveZoomRedraw = null
   }
 })
 </script>

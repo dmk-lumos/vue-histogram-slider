@@ -12,6 +12,11 @@ export interface HistogramSliderPublicProps {
   /**
    * Required series used for the histogram bins and slider domain when {@link min} / {@link max}
    * are omitted.
+   *
+   * When this array is **replaced** (new reference), the histogram and bins **redraw** from the new
+   * values while keeping the current **brush zoom** (`x` domain) and handle span (clamped into the
+   * zoom window). In-place mutation of the same array does **not** trigger an update — assign a new
+   * array (e.g. `data.slice()` or `[...data]`) if you need that.
    */
   data: number[]
 
@@ -98,7 +103,13 @@ export interface HistogramSliderPublicProps {
   /** Keyboard nudging. Default: `true`. */
   keyboard?: boolean
 
-  /** `double` (two handles) or `single`. Default: `'double'`. */
+  /**
+   * `double` (two handles) or `single`. Default: `'double'`.
+   *
+   * Changing this at runtime **rebuilds Ion** for the new mode but keeps the current **brush zoom**
+   * (`x` domain). Handle values are **clamped** into the visible window; out-of-range values snap to
+   * the lower and/or upper bound of data in view (single mode sets `to` to the view max).
+   */
   type?: 'double' | 'single'
 
   /** Total control width in px. Default: `650`. */
