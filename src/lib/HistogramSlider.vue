@@ -151,6 +151,7 @@ type IonRangeHandle = {
   destroy(): void
   update(opts: { from?: number; to?: number }): void
   readonly result: { from: number; to: number }
+  readonly options: { min: number; max: number }
 }
 
 export default defineComponent({
@@ -244,7 +245,9 @@ export default defineComponent({
   watch: {
     data: {
       handler() {
-        this.requestPreserveZoomRedraw()
+        if (!this.handleInteractionActive) {
+          this.requestPreserveZoomRedraw()
+        }
       }
     },
     type() {

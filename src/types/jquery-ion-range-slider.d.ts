@@ -3,6 +3,7 @@ export interface IonRangeSliderHandle {
   destroy(): void
   update(opts: { from?: number; to?: number }): void
   readonly result: { from: number; to: number }
+  readonly options: { min: number; max: number }
 }
 
 declare module 'jquery' {
