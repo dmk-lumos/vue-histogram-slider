@@ -53,9 +53,14 @@ export interface HistogramSliderPublicProps {
   defaultTo?: number
 
   /**
-   * Two‑way binding for the current range (`from` / `to`). Emitted as `update:modelValue` when the
-   * user drags, brushes, double‑clicks to reset, or when the instance `update()` method runs.
-   * Not emitted on the very first paint before the slider is ready (avoids spurious parent updates).
+   * Two‑way binding for the current range (`from` / `to`).
+   *
+   * **Child → parent:** `update:modelValue` during handle drag (live Ion `change` only), and when a
+   * selection **commits** (handle release, brush zoom, preserve‑zoom `data`/`type` refresh, double‑click
+   * reset, or imperative `update()`). Never emitted while the chart is rebuilding (`emitReady` false).
+   *
+   * **Parent → child:** updates Ion via `.update()` only (no plugin destroy). Ignored while the user is
+   * dragging a handle or the chart is rebuilding; applied after release / rebuild via an internal queue.
    */
   modelValue?: RangeValues
 
@@ -178,16 +183,19 @@ export interface HistogramSliderPublicProps {
  * `@update:model-value`, `@drag-start`, `@drag-end`, `@range-updated`, `@range-reset`).
  *
  * **`dragStart` / `dragEnd`** — **`dragStart`** emits the **`PointerEvent`** from **pointer-down** on Ion’s
- * interactive surface (handles, labels, line, bar, shadows). **`dragEnd`** emits **`(event, values)`**:
- * the matching **`pointerup`** `PointerEvent` when available, otherwise a synthetic **`PointerEvent`**
- * (type **`finish`**) for keyboard **`onFinish`** without a prior handle press. They do **not** fire for histogram **brush** zoom or
- * **double‑click** domain reset. Live values use **`update:modelValue`** (Ion `onChange`). Keyboard
- * nudges may call **`onFinish`** without a preceding **`dragStart`** (Ion never signals a real “press” for keys).
+ * interactive surface (handles, labels, line, bar, shadows) and **locks out** parent-driven Ion re-inits
+ * until **`dragEnd`**. **`dragEnd`** emits **`(event, values)`** after Ion **`onFinish`**. They do **not**
+ * fire for histogram **brush** zoom or **double‑click** domain reset. Live preview during drag uses
+ * **`update:modelValue`** only (no **`rangeUpdated`**). Keyboard nudges may **`onFinish`** without **`dragStart`**.
  *
- * **`rangeUpdated`** fires when the **selection** settles after a **handle** release (with `dragEnd`)
- * or after **brush** zoom into a narrower domain. It does **not** fire on double‑click full-domain
- * reset — use **`rangeReset`** for that so listeners can treat zoom-home vs in-domain changes
- * separately (same {@link RangeValues} payload shape for both).
+ * **`rangeUpdated`** — **committed** selection: handle release (with **`dragEnd`**), **brush** zoom, or
+ * preserve‑zoom **`data` / `type`** refresh (even when `from`/`to` are unchanged). Does **not** fire on
+ * double‑click full-domain reset — use **`rangeReset`**. Not fired for live handle drag frames.
+ *
+ * **Ion re-init** (histogram rebuild + plugin recreate) runs only on: **initial mount**, **brush** zoom,
+ * **double‑click** reset (`clip`), and **`data` / `type`** changes when props differ from the last rebuild
+ * (preserve zoom; skipped while dragging, fulfilled after **`dragEnd`** or rebuild completes).
+ * Parent **`modelValue`** and **`update()`** use Ion **`.update()`** only, never that rebuild path.
  *
  * **`rangeReset`** fires only after **double‑click** on the histogram restores the **full** data
  * domain (requires {@link HistogramSliderPublicProps.clip}). Imperative `update()` updates

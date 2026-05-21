@@ -113,14 +113,20 @@ Full prop and event documentation lives in **`src/lib/histogram-slider.types.ts`
 
 ## Events and `v-model`
 
-Use **`v-model`** (or `v-model:modelValue`) with `{ from, to }` for two-way range binding. The component emits **`update:modelValue`** while the user drags (Ion `change`), after brush zoom, after double-click reset, and when you call **`update()`** on the instance.
+Use **`v-model`** (or `v-model:modelValue`) with `{ from, to }` for two-way range binding.
+
+**Parent → child:** setting `modelValue` calls Ion **`.update()`** only (handles move, bar colors refresh). It does **not** destroy or re-create the slider. Updates are **queued** while the user is dragging a handle or the chart is rebuilding.
+
+**Child → parent:** **`update:modelValue`** fires on live handle drag (preview) and whenever the range **commits** (see **`rangeUpdated`**). Nothing is emitted until the slider is ready after mount/rebuild.
+
+**Ion re-init** (histogram + plugin recreate) happens only on: initial mount, **brush** zoom, **double-click** reset (`clip`), and **`data` / `type`** changes (zoom preserved; deferred until handle release if dragging).
 
 | Name | When it fires |
 |------|----------------|
-| `update:modelValue` | Range values change (live handle drag, brush / reset, or imperative `update()`). Not fired on the very first paint before the slider is ready. |
-| `dragStart` | User **pointer-down** on any Ion control that can end with **`dragEnd`**: handles, from/to/single labels, track line, bar, or shadow spans. Not per-frame; not brush or double-click on the histogram. |
-| `dragEnd` | **Ion.RangeSlider `onFinish` only** — user releases the handle after a drag. Not emitted for brush zoom or double-click reset. |
-| `rangeUpdated` | Selection settled after **handle** release (with `dragEnd`) or **brush** zoom. Not double-click full-domain reset. |
+| `update:modelValue` | Live handle drag (`update:modelValue` only), or committed range (brush, `data`/`type` refresh, reset, `update()`). Not during chart rebuild. |
+| `dragStart` | **Pointer-down** on Ion controls; blocks parent `v-model` / `data` / `type` from re-initializing Ion until **`dragEnd`**. |
+| `dragEnd` | Handle released after drag (`onFinish`). Not brush or double-click. |
+| `rangeUpdated` | **Committed** selection: handle release, brush zoom, or `data`/`type` preserve-zoom refresh. Not live drag frames. Not double-click reset. |
 | `rangeReset` | **Double-click** restored the full histogram domain (`clip`); selection reset to defaults / full span. |
 
 TypeScript: import **`RangeValues`**, **`HistogramSliderPublicProps`**, **`HistogramSliderEmits`**, and the default component from **`vue-histogram-slider`** (see **`dist/histogram-slider.d.ts`**).

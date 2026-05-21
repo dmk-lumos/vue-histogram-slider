@@ -137,6 +137,17 @@ export default defineComponent({
     ionDragFinishPointerUpHandler: EventListener | null
     /** Set in `mounted`: redraw while keeping `x` zoom domain and clamping handles into view. */
     chartPreserveZoomRedraw: (() => void) | null
+    /** True from handle `pointerdown` until Ion `onFinish` (blocks external re-inits). */
+    handleInteractionActive: boolean
+    /** `data` / `type` last baked into a histogram rebuild (staleness → preserve-zoom redraw). */
+    chartSyncedData: number[] | null
+    chartSyncedType: 'double' | 'single' | null
+    /** Deferred parent `modelValue` / `update()` while dragging or rebuilding. */
+    pendingExternalModelValue: RangeValues | null
+    /** Selection to commit after a preserve-zoom rebuild (`emitReady` only). */
+    pendingPreserveCommit: RangeValues | null
+    /** Selection to commit after brush zoom rebuild (`emitReady` only). */
+    pendingBrushCommit: boolean
   } {
     const uid = ++nextHistogramSliderUid
     return {
@@ -149,7 +160,13 @@ export default defineComponent({
       emitReady: false,
       ionDragFinishEvent: null,
       ionDragFinishPointerUpHandler: null,
-      chartPreserveZoomRedraw: null
+      chartPreserveZoomRedraw: null,
+      handleInteractionActive: false,
+      chartSyncedData: null,
+      chartSyncedType: null,
+      pendingExternalModelValue: null,
+      pendingPreserveCommit: null,
+      pendingBrushCommit: false
     }
   },
 
@@ -174,58 +191,112 @@ export default defineComponent({
   watch: {
     data: {
       handler() {
-        this.chartPreserveZoomRedraw?.()
+        this.requestPreserveZoomRedraw()
       }
     },
     type() {
-      this.chartPreserveZoomRedraw?.()
+      this.requestPreserveZoomRedraw()
     },
     modelValue: {
       deep: true,
       handler(next?: RangeValues) {
-        if (!next || !this.ionRangeSlider) return
-        const cur = this.ionRangeSlider.result
-        if (cur.from === next.from && cur.to === next.to) return
-        this.ionRangeSlider.update({ from: next.from, to: next.to })
-        this.updateBarColor?.(next)
+        if (!next) return
+        this.applyExternalModelValue(next)
       }
     }
   },
 
   methods: {
-    update({ from, to }: RangeValues) {
-      if (this.ionRangeSlider) {
-        this.ionRangeSlider.update({ from, to })
-        this.updateBarColor?.({ from, to })
-        this.$emit('update:modelValue', { from, to })
-      }
+    chartPropsStale(): boolean {
+      return this.data !== this.chartSyncedData || this.type !== this.chartSyncedType
     },
-    /** Live `v-model` sync while dragging (no `dragEnd` / `rangeUpdated`). */
+    /**
+     * `data` / `type` preserve-zoom redraw when props differ from the last rebuild.
+     * Skipped while dragging (`handleInteractionActive`) or rebuilding (`!emitReady`); fulfilled after.
+     */
+    tryFulfillPreserveZoomRedraw() {
+      if (!this.chartPreserveZoomRedraw || this.handleInteractionActive || !this.emitReady) return
+      if (!this.chartPropsStale()) return
+      this.chartPreserveZoomRedraw()
+    },
+    requestPreserveZoomRedraw() {
+      this.tryFulfillPreserveZoomRedraw()
+    },
+    /**
+     * Parent `v-model` or `update()`: Ion `.update()` only — never destroys/recreates the plugin.
+     * Queued while the user is dragging or the chart is rebuilding.
+     */
+    applyExternalModelValue(next: RangeValues) {
+      if (!this.ionRangeSlider) return
+      if (this.handleInteractionActive || !this.emitReady) {
+        this.pendingExternalModelValue = { ...next }
+        return
+      }
+      const cur = this.ionRangeSlider.result
+      if (cur.from === next.from && cur.to === next.to) return
+      this.ionRangeSlider.update({ from: next.from, to: next.to })
+      this.updateBarColor?.(next)
+    },
+    flushDeferredUpdates() {
+      if (this.handleInteractionActive) return
+      if (this.pendingExternalModelValue) {
+        const next = this.pendingExternalModelValue
+        this.pendingExternalModelValue = null
+        this.applyExternalModelValue(next)
+      }
+      this.tryFulfillPreserveZoomRedraw()
+    },
+    update({ from, to }: RangeValues) {
+      if (!this.ionRangeSlider) return
+      if (this.handleInteractionActive || !this.emitReady) {
+        this.pendingExternalModelValue = { from, to }
+        return
+      }
+      this.ionRangeSlider.update({ from, to })
+      this.updateBarColor?.({ from, to })
+      this.$emit('update:modelValue', { from, to })
+    },
+    /** Live `v-model` during handle drag only (`update:modelValue`, no `rangeUpdated`). */
     onSliderLive(val: RangeValues) {
       if (!this.emitReady) return
       const mv = this.modelValue
       if (mv && mv.from === val.from && mv.to === val.to) return
       this.$emit('update:modelValue', { ...val })
     },
+    /** After rebuild or clamp: sync `v-model` when needed, always emit `rangeUpdated`. */
+    commitSelection(val: RangeValues) {
+      if (!this.emitReady) return
+      const payload = { ...val }
+      const mv = this.modelValue
+      if (!mv || mv.from !== payload.from || mv.to !== payload.to) {
+        this.$emit('update:modelValue', payload)
+      }
+      this.$emit('rangeUpdated', payload)
+    },
     /** Ion `onFinish`: sync `v-model`, then `dragEnd` + `rangeUpdated` (handle interaction only). */
     onIonHandleFinish(val: RangeValues) {
       if (!this.emitReady) return
+      this.handleInteractionActive = false
       this.onSliderLive(val)
       const payload = { ...val }
       const finishEv = this.ionDragFinishEvent ?? syntheticFinishPointerEvent()
       this.ionDragFinishEvent = null
       this.$emit('dragEnd', finishEv, payload)
-      this.$emit('rangeUpdated', payload)
-    },
-    /** Brush zoom complete: `rangeUpdated` only (no `dragEnd`). */
-    emitRangeUpdated(val: RangeValues) {
-      if (!this.emitReady) return
-      this.$emit('rangeUpdated', { ...val })
+      this.commitSelection(payload)
+      this.flushDeferredUpdates()
     },
     /** Double-click cleared zoom to full data domain; emits `rangeReset` (not `rangeUpdated`). */
     emitRangeReset(val: RangeValues) {
       if (!this.emitReady) return
       this.$emit('rangeReset', { ...val })
+    },
+    /** Drop capture-phase `pointerup` on `document` (survives Ion DOM removal). */
+    clearIonDragCapture() {
+      if (this.ionDragFinishPointerUpHandler) {
+        document.removeEventListener('pointerup', this.ionDragFinishPointerUpHandler, true)
+        this.ionDragFinishPointerUpHandler = null
+      }
+      this.ionDragFinishEvent = null
     },
     /**
      * Ion 2.3.1’s `onStart` runs only on first `init`, not on user press — delegate `pointerdown` on the
@@ -252,11 +323,8 @@ export default defineComponent({
         if (!this.emitReady || !this.ionRangeSlider) return
         const pe = e.originalEvent
         if (pe instanceof PointerEvent && pe.pointerType === 'mouse' && pe.button === 2) return
-        if (this.ionDragFinishPointerUpHandler) {
-          document.removeEventListener('pointerup', this.ionDragFinishPointerUpHandler, true)
-          this.ionDragFinishPointerUpHandler = null
-        }
-        this.ionDragFinishEvent = null
+        this.clearIonDragCapture()
+        this.handleInteractionActive = true
         const domEv = coerceSliderPointerDown(e)
         this.$emit('dragStart', domEv)
         const onUp: EventListener = (up) => {
@@ -305,6 +373,8 @@ export default defineComponent({
       series = this.data ?? []
       fullMin = this.min ?? d3Array.min(series) ?? 0
       fullMax = this.max ?? d3Array.max(series) ?? 0
+      this.chartSyncedData = this.data ?? null
+      this.chartSyncedType = this.type
       if (this.colors) {
         colors = d3Scale
           .scaleLinear<string>()
@@ -394,8 +464,16 @@ export default defineComponent({
       hist.attr('clip-path', `url(#${this.clipId})`)
     }
 
-    const updateHistogram = ([domainMin, domainMax]: [number, number], preserveZoomSelection = false) => {
+    const updateHistogram = (
+      [domainMin, domainMax]: [number, number],
+      preserveZoomSelection = false,
+      commitSelectionOnReady = false
+    ) => {
+      if (preserveZoomSelection && this.handleInteractionActive) return
+
       this.emitReady = false
+      this.pendingPreserveCommit = null
+      this.pendingBrushCommit = false
       syncSeriesAndFullExtent()
 
       barsLayer.selectAll(`.vue-histogram-slider-bar-${this.id}`).remove()
@@ -438,6 +516,11 @@ export default defineComponent({
           : initialRangeForDomain(domainMin, domainMax)
 
       if (this.ionRangeSlider) {
+        $(`#${this.histogramId}`).prev('.irs').off('.vueHistSliderDrag')
+        this.clearIonDragCapture()
+        if (this.handleInteractionActive) {
+          this.handleInteractionActive = false
+        }
         this.ionRangeSlider.destroy()
       }
 
@@ -478,10 +561,10 @@ export default defineComponent({
       this.bindIonDragStartEmitter()
 
       if (preserveZoomSelection) {
-        const mv = this.modelValue
-        if (!mv || mv.from !== sliderRange.from || mv.to !== sliderRange.to) {
-          this.$emit('update:modelValue', { ...sliderRange })
-        }
+        this.pendingPreserveCommit = { ...sliderRange }
+      }
+      if (commitSelectionOnReady) {
+        this.pendingBrushCommit = true
       }
 
       setTimeout(() => {
@@ -489,11 +572,20 @@ export default defineComponent({
           this.updateBarColor(this.ionRangeSlider.result)
         }
         this.emitReady = true
+        if (this.pendingPreserveCommit) {
+          const commit = this.pendingPreserveCommit
+          this.pendingPreserveCommit = null
+          this.commitSelection(commit)
+        } else if (this.pendingBrushCommit && this.ionRangeSlider) {
+          this.pendingBrushCommit = false
+          this.commitSelection(this.ionRangeSlider.result)
+        }
+        this.flushDeferredUpdates()
       }, this.transitionDuration + 10)
     }
 
     this.chartPreserveZoomRedraw = () => {
-      if (!this.ionRangeSlider) return
+      if (!this.ionRangeSlider || this.handleInteractionActive) return
       const d = x.domain()
       const lo = Math.min(d[0], d[1])
       const hi = Math.max(d[0], d[1])
@@ -506,15 +598,8 @@ export default defineComponent({
         if (extent && extent.length === 2 && this.ionRangeSlider && brushBehavior) {
           const domain = [x.invert(extent[0]), x.invert(extent[1])] as [number, number]
           x.domain(domain)
-          updateHistogram(domain)
+          updateHistogram(domain, false, true)
           hist.call(brushBehavior.clear)
-          setTimeout(() => {
-            if (this.ionRangeSlider) {
-              const val = this.ionRangeSlider.result
-              this.onSliderLive(val)
-              this.emitRangeUpdated(val)
-            }
-          }, this.transitionDuration + 10)
         }
       })
       hist.call(brushBehavior)
@@ -527,14 +612,20 @@ export default defineComponent({
     $(`#${this.histogramId}`)
       .prev('.irs')
       .off('.vueHistSliderDrag')
-    if (this.ionDragFinishPointerUpHandler) {
-      document.removeEventListener('pointerup', this.ionDragFinishPointerUpHandler, true)
-      this.ionDragFinishPointerUpHandler = null
+    this.clearIonDragCapture()
+    if (this.handleInteractionActive) {
+      this.handleInteractionActive = false
     }
     if (this.ionRangeSlider) {
       this.ionRangeSlider.destroy()
     }
     this.chartPreserveZoomRedraw = null
+    this.handleInteractionActive = false
+    this.chartSyncedData = null
+    this.chartSyncedType = null
+    this.pendingExternalModelValue = null
+    this.pendingPreserveCommit = null
+    this.pendingBrushCommit = false
   }
 })
 </script>
