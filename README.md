@@ -115,7 +115,9 @@ Full prop and event documentation lives in **`src/lib/histogram-slider.types.ts`
 
 Use **`v-model`** (or `v-model:modelValue`) with `{ from, to }` for two-way range binding.
 
-**Parent → child:** setting `modelValue` calls Ion **`.update()`** only (handles move, bar colors refresh). It does **not** destroy or re-create the slider. Updates are **queued** while the user is dragging a handle or the chart is rebuilding.
+**Parent → child:** setting `modelValue` calls Ion **`.update()`** only (handles move, bar colors refresh). It does **not** destroy or re-create the slider. While the user is **dragging**, parent `modelValue` writes are **ignored** (Ion is the source of truth until release). Echoed writes after the child’s own `update:modelValue` are ignored to avoid feedback loops. Other updates are **queued** while the chart is rebuilding.
+
+Avoid driving `v-model` from `@range-updated` with transformed values during an active drag, or passing a **new** `:data` array reference on every parent render; use `@range-updated` for commits (filter, fetch) and keep `data` referentially stable until the series actually changes.
 
 **Child → parent:** **`update:modelValue`** fires on live handle drag (preview) and whenever the range **commits** (see **`rangeUpdated`**). Nothing is emitted until the slider is ready after mount/rebuild.
 

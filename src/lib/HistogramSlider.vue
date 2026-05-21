@@ -73,31 +73,65 @@ function syntheticFinishPointerEvent(): PointerEvent {
   })
 }
 
-/** Prefer browser `PointerEvent` from jQuery; rare fallbacks use a minimal synthetic. */
-function coerceSliderPointerDown(e: JQuery.TriggeredEvent): PointerEvent {
+/** `dragStart` payload — aligned with Ion’s `mousedown` / `touchstart` (not `pointerdown`). */
+function coerceSliderDragStart(e: JQuery.TriggeredEvent): PointerEvent {
   const oe = e.originalEvent
   if (oe instanceof PointerEvent) return oe
-  const me = e as unknown as MouseEvent
+  if (oe instanceof MouseEvent) {
+    return new PointerEvent('pointerdown', {
+      bubbles: e.bubbles,
+      cancelable: e.cancelable,
+      pointerId: 0,
+      pointerType: 'mouse',
+      clientX: oe.clientX,
+      clientY: oe.clientY
+    })
+  }
+  if (oe instanceof TouchEvent && oe.touches.length > 0) {
+    const t = oe.touches[0]
+    return new PointerEvent('pointerdown', {
+      bubbles: e.bubbles,
+      cancelable: e.cancelable,
+      pointerId: t.identifier,
+      pointerType: 'touch',
+      clientX: t.clientX,
+      clientY: t.clientY
+    })
+  }
   return new PointerEvent('pointerdown', {
-    bubbles: e.bubbles,
-    cancelable: e.cancelable,
-    pointerId: 0,
-    pointerType: 'mouse',
-    clientX: typeof me.clientX === 'number' ? me.clientX : 0,
-    clientY: typeof me.clientY === 'number' ? me.clientY : 0
-  })
-}
-
-function coercePointerUp(up: Event): PointerEvent {
-  if (up instanceof PointerEvent) return up
-  return new PointerEvent('pointerup', {
     bubbles: false,
     cancelable: false,
-    pointerId: -1,
-    pointerType: '',
+    pointerId: 0,
+    pointerType: 'mouse',
     clientX: 0,
     clientY: 0
   })
+}
+
+function coerceDragFinishEvent(up: Event): PointerEvent {
+  if (up instanceof PointerEvent) return up
+  if (up instanceof MouseEvent) {
+    return new PointerEvent('pointerup', {
+      bubbles: false,
+      cancelable: false,
+      pointerId: 0,
+      pointerType: 'mouse',
+      clientX: up.clientX,
+      clientY: up.clientY
+    })
+  }
+  if (up instanceof TouchEvent && up.changedTouches.length > 0) {
+    const t = up.changedTouches[0]
+    return new PointerEvent('pointerup', {
+      bubbles: false,
+      cancelable: false,
+      pointerId: t.identifier,
+      pointerType: 'touch',
+      clientX: t.clientX,
+      clientY: t.clientY
+    })
+  }
+  return syntheticFinishPointerEvent()
 }
 
 type BinDatum = { x0: number; length: number }
@@ -157,6 +191,8 @@ export default defineComponent({
     chartSyncedType: 'double' | 'single' | null
     /** Last range emitted on `rangeUpdated` (dedupe spurious commits). */
     lastCommittedRange: RangeValues | null
+    /** Last range sent to parent via `update:modelValue` (ignore echoed prop writes). */
+    lastEmittedModelRange: RangeValues | null
     /** Deferred parent `modelValue` / `update()` while dragging or rebuilding. */
     pendingExternalModelValue: RangeValues | null
     /** Preserve-zoom commit after rebuild (`forceCommit` → `rangeUpdated` even if range unchanged). */
@@ -180,6 +216,7 @@ export default defineComponent({
       chartSyncedSeriesSig: '',
       chartSyncedType: null,
       lastCommittedRange: null,
+      lastEmittedModelRange: null,
       pendingExternalModelValue: null,
       pendingPreserveCommit: null,
       pendingBrushCommit: false
@@ -214,7 +251,6 @@ export default defineComponent({
       this.requestPreserveZoomRedraw()
     },
     modelValue: {
-      deep: true,
       handler(next?: RangeValues) {
         if (!next) return
         this.applyExternalModelValue(next)
@@ -241,13 +277,26 @@ export default defineComponent({
     requestPreserveZoomRedraw() {
       this.tryFulfillPreserveZoomRedraw()
     },
+    recordEmittedModelRange(val: RangeValues) {
+      this.lastEmittedModelRange = { from: val.from, to: val.to }
+    },
     /**
-     * Parent `v-model` or `update()`: Ion `.update()` only — never destroys/recreates the plugin.
-     * Queued while the user is dragging or the chart is rebuilding.
+     * Parent `v-model` / `update()` → Ion `.update()` only (never rebuilds the plugin).
+     * Ignored while dragging (Ion is source of truth until `dragEnd`) and when the prop
+     * echoes our own `update:modelValue` (common v-model + `@range-updated` loop).
      */
     applyExternalModelValue(next: RangeValues) {
       if (!this.ionRangeSlider) return
-      if (this.handleInteractionActive || !this.emitReady) {
+      if (
+        this.lastEmittedModelRange &&
+        rangeEqual(this.lastEmittedModelRange, next)
+      ) {
+        return
+      }
+      if (this.handleInteractionActive) {
+        return
+      }
+      if (!this.emitReady) {
         this.pendingExternalModelValue = { ...next }
         return
       }
@@ -273,13 +322,15 @@ export default defineComponent({
       }
       this.ionRangeSlider.update({ from, to })
       this.updateBarColor?.({ from, to })
+      this.recordEmittedModelRange({ from, to })
       this.$emit('update:modelValue', { from, to })
     },
     /** Live `v-model` during handle drag only (`update:modelValue`, no `rangeUpdated`). */
     onSliderLive(val: RangeValues) {
       if (!this.emitReady) return
       const mv = this.modelValue
-      if (mv && mv.from === val.from && mv.to === val.to) return
+      if (mv && rangeEqual(mv, val)) return
+      this.recordEmittedModelRange(val)
       this.$emit('update:modelValue', { ...val })
     },
     /**
@@ -294,6 +345,7 @@ export default defineComponent({
       }
       const mv = this.modelValue
       if (!mv || !rangeEqual(mv, payload)) {
+        this.recordEmittedModelRange(payload)
         this.$emit('update:modelValue', payload)
       }
       this.$emit('rangeUpdated', payload)
@@ -316,17 +368,28 @@ export default defineComponent({
       if (!this.emitReady) return
       this.$emit('rangeReset', { ...val })
     },
-    /** Drop capture-phase `pointerup` on `document` (survives Ion DOM removal). */
+    /** Drop `window` mouseup/touchend paired with Ion (registered after Ion `bindEvents`). */
     clearIonDragCapture() {
       if (this.ionDragFinishPointerUpHandler) {
-        document.removeEventListener('pointerup', this.ionDragFinishPointerUpHandler, true)
+        window.removeEventListener('mouseup', this.ionDragFinishPointerUpHandler, false)
+        window.removeEventListener('touchend', this.ionDragFinishPointerUpHandler, false)
         this.ionDragFinishPointerUpHandler = null
       }
       this.ionDragFinishEvent = null
     },
+    /** Ion drag targets only — same events Ion uses (`mousedown` / `touchstart`), not click-only surfaces. */
+    ionDragStartSelector(): string {
+      const parts = ['.irs-handle', '.irs-from', '.irs-to']
+      if (this.type === 'single') {
+        parts.push('.irs-single')
+      } else if (this.dragInterval) {
+        parts.push('.irs-bar')
+      }
+      return parts.join(', ')
+    },
     /**
-     * Ion 2.3.1’s `onStart` runs only on first `init`, not on user press — delegate `pointerdown` on the
-     * slider surface so `dragStart` pairs with Ion `onFinish` / `dragEnd` (handles, labels, line, bar, shadows).
+     * Ion 2.3.1’s `onStart` runs only on first `init`, not on user press — delegate `mousedown` /
+     * `touchstart` on Ion drag handles so `dragStart` pairs with `onFinish` without fighting pointer events.
      */
     bindIonDragStartEmitter() {
       const $input = $(`#${this.histogramId}`) as JQuery<HTMLElement>
@@ -334,33 +397,33 @@ export default defineComponent({
       $irs.off('.vueHistSliderDrag')
       if (!$irs.length || !this.ionRangeSlider) return
 
-      const selectorParts = [
-        '.irs-handle',
-        '.irs-from',
-        '.irs-to',
-        '.irs-single',
-        '.irs-line',
-        '.irs-bar',
-        '.irs-shadow'
-      ]
-      const selector = selectorParts.join(', ')
+      const selector = this.ionDragStartSelector()
 
-      $irs.on(`pointerdown.vueHistSliderDrag`, selector, (e: JQuery.TriggeredEvent) => {
+      const onDown = (e: JQuery.TriggeredEvent) => {
         if (!this.emitReady || !this.ionRangeSlider) return
-        const pe = e.originalEvent
-        if (pe instanceof PointerEvent && pe.pointerType === 'mouse' && pe.button === 2) return
+        if (e.type === 'mousedown') {
+          const me = e.originalEvent
+          if (me instanceof MouseEvent && me.button === 2) return
+        }
+        // Touch then synthetic mouse on same press — only track once.
+        if (this.handleInteractionActive) return
+
         this.clearIonDragCapture()
         this.handleInteractionActive = true
-        const domEv = coerceSliderPointerDown(e)
-        this.$emit('dragStart', domEv)
+        this.$emit('dragStart', coerceSliderDragStart(e))
+
         const onUp: EventListener = (up) => {
-          document.removeEventListener('pointerup', onUp, true)
+          window.removeEventListener('mouseup', onUp, false)
+          window.removeEventListener('touchend', onUp, false)
           this.ionDragFinishPointerUpHandler = null
-          this.ionDragFinishEvent = coercePointerUp(up)
+          this.ionDragFinishEvent = coerceDragFinishEvent(up)
         }
         this.ionDragFinishPointerUpHandler = onUp
-        document.addEventListener('pointerup', onUp, true)
-      })
+        window.addEventListener('mouseup', onUp, false)
+        window.addEventListener('touchend', onUp, false)
+      }
+
+      $irs.on('mousedown.vueHistSliderDrag touchstart.vueHistSliderDrag', selector, onDown)
     }
   },
 
@@ -665,6 +728,7 @@ export default defineComponent({
     this.chartSyncedSeriesSig = ''
     this.chartSyncedType = null
     this.lastCommittedRange = null
+    this.lastEmittedModelRange = null
     this.pendingExternalModelValue = null
     this.pendingPreserveCommit = null
     this.pendingBrushCommit = false

@@ -60,7 +60,9 @@ export interface HistogramSliderPublicProps {
    * reset, or imperative `update()`). Never emitted while the chart is rebuilding (`emitReady` false).
    *
    * **Parent → child:** updates Ion via `.update()` only (no plugin destroy). Ignored while the user is
-   * dragging a handle or the chart is rebuilding; applied after release / rebuild via an internal queue.
+   * dragging a handle (Ion owns the gesture until `dragEnd`). Writes that only echo a recent
+   * `update:modelValue` from this component are ignored to prevent v-model feedback loops. While the
+   * chart is rebuilding, updates are queued until `emitReady`.
    */
   modelValue?: RangeValues
 
