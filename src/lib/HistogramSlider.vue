@@ -40,6 +40,19 @@ function clampSelection(from: number, to: number, lo: number, hi: number): Range
   return { from: f, to: t }
 }
 
+/** Cheap series identity for stale checks (avoids redraw loops on new array references). */
+function seriesSignature(arr: number[] | undefined | null): string {
+  const a = arr ?? []
+  if (!a.length) return 'len:0'
+  const lo = d3Array.min(a) ?? 0
+  const hi = d3Array.max(a) ?? 0
+  return `len:${a.length}|${lo}|${hi}`
+}
+
+function rangeEqual(a: RangeValues, b: RangeValues): boolean {
+  return a.from === b.from && a.to === b.to
+}
+
 /** Clamp handles into the current zoom window; single mode keeps `to` at the view max. */
 function clampRangeToView(val: RangeValues, lo: number, hi: number, single: boolean): RangeValues {
   if (single) {
@@ -139,13 +152,15 @@ export default defineComponent({
     chartPreserveZoomRedraw: (() => void) | null
     /** True from handle `pointerdown` until Ion `onFinish` (blocks external re-inits). */
     handleInteractionActive: boolean
-    /** `data` / `type` last baked into a histogram rebuild (staleness → preserve-zoom redraw). */
-    chartSyncedData: number[] | null
+    /** Series fingerprint last baked into a histogram rebuild. */
+    chartSyncedSeriesSig: string
     chartSyncedType: 'double' | 'single' | null
+    /** Last range emitted on `rangeUpdated` (dedupe spurious commits). */
+    lastCommittedRange: RangeValues | null
     /** Deferred parent `modelValue` / `update()` while dragging or rebuilding. */
     pendingExternalModelValue: RangeValues | null
-    /** Selection to commit after a preserve-zoom rebuild (`emitReady` only). */
-    pendingPreserveCommit: RangeValues | null
+    /** Preserve-zoom commit after rebuild (`forceCommit` → `rangeUpdated` even if range unchanged). */
+    pendingPreserveCommit: { range: RangeValues; forceCommit: boolean } | null
     /** Selection to commit after brush zoom rebuild (`emitReady` only). */
     pendingBrushCommit: boolean
   } {
@@ -162,8 +177,9 @@ export default defineComponent({
       ionDragFinishPointerUpHandler: null,
       chartPreserveZoomRedraw: null,
       handleInteractionActive: false,
-      chartSyncedData: null,
+      chartSyncedSeriesSig: '',
       chartSyncedType: null,
+      lastCommittedRange: null,
       pendingExternalModelValue: null,
       pendingPreserveCommit: null,
       pendingBrushCommit: false
@@ -207,8 +223,11 @@ export default defineComponent({
   },
 
   methods: {
-    chartPropsStale(): boolean {
-      return this.data !== this.chartSyncedData || this.type !== this.chartSyncedType
+    chartSeriesStale(): boolean {
+      return (
+        this.type !== this.chartSyncedType ||
+        seriesSignature(this.data) !== this.chartSyncedSeriesSig
+      )
     },
     /**
      * `data` / `type` preserve-zoom redraw when props differ from the last rebuild.
@@ -216,7 +235,7 @@ export default defineComponent({
      */
     tryFulfillPreserveZoomRedraw() {
       if (!this.chartPreserveZoomRedraw || this.handleInteractionActive || !this.emitReady) return
-      if (!this.chartPropsStale()) return
+      if (!this.chartSeriesStale()) return
       this.chartPreserveZoomRedraw()
     },
     requestPreserveZoomRedraw() {
@@ -263,15 +282,22 @@ export default defineComponent({
       if (mv && mv.from === val.from && mv.to === val.to) return
       this.$emit('update:modelValue', { ...val })
     },
-    /** After rebuild or clamp: sync `v-model` when needed, always emit `rangeUpdated`. */
-    commitSelection(val: RangeValues) {
+    /**
+     * Committed selection (`rangeUpdated`). Skipped when range matches `lastCommittedRange`
+     * unless `forceCommit` (e.g. `data` refreshed with the same handle span).
+     */
+    commitSelection(val: RangeValues, forceCommit = false) {
       if (!this.emitReady) return
       const payload = { ...val }
+      if (!forceCommit && this.lastCommittedRange && rangeEqual(this.lastCommittedRange, payload)) {
+        return
+      }
       const mv = this.modelValue
-      if (!mv || mv.from !== payload.from || mv.to !== payload.to) {
+      if (!mv || !rangeEqual(mv, payload)) {
         this.$emit('update:modelValue', payload)
       }
       this.$emit('rangeUpdated', payload)
+      this.lastCommittedRange = payload
     },
     /** Ion `onFinish`: sync `v-model`, then `dragEnd` + `rangeUpdated` (handle interaction only). */
     onIonHandleFinish(val: RangeValues) {
@@ -373,7 +399,7 @@ export default defineComponent({
       series = this.data ?? []
       fullMin = this.min ?? d3Array.min(series) ?? 0
       fullMax = this.max ?? d3Array.max(series) ?? 0
-      this.chartSyncedData = this.data ?? null
+      this.chartSyncedSeriesSig = seriesSignature(this.data)
       this.chartSyncedType = this.type
       if (this.colors) {
         colors = d3Scale
@@ -471,9 +497,17 @@ export default defineComponent({
     ) => {
       if (preserveZoomSelection && this.handleInteractionActive) return
 
+      const seriesOrTypeChanged = preserveZoomSelection && this.chartSeriesStale()
+
       this.emitReady = false
       this.pendingPreserveCommit = null
       this.pendingBrushCommit = false
+
+      let rangeBeforeDestroy: RangeValues | null = null
+      if (preserveZoomSelection && this.ionRangeSlider) {
+        rangeBeforeDestroy = { ...this.ionRangeSlider.result }
+      }
+
       syncSeriesAndFullExtent()
 
       barsLayer.selectAll(`.vue-histogram-slider-bar-${this.id}`).remove()
@@ -561,7 +595,14 @@ export default defineComponent({
       this.bindIonDragStartEmitter()
 
       if (preserveZoomSelection) {
-        this.pendingPreserveCommit = { ...sliderRange }
+        const selectionChanged =
+          !rangeBeforeDestroy || !rangeEqual(rangeBeforeDestroy, sliderRange)
+        if (seriesOrTypeChanged || selectionChanged) {
+          this.pendingPreserveCommit = {
+            range: { ...sliderRange },
+            forceCommit: seriesOrTypeChanged
+          }
+        }
       }
       if (commitSelectionOnReady) {
         this.pendingBrushCommit = true
@@ -573,9 +614,9 @@ export default defineComponent({
         }
         this.emitReady = true
         if (this.pendingPreserveCommit) {
-          const commit = this.pendingPreserveCommit
+          const { range, forceCommit } = this.pendingPreserveCommit
           this.pendingPreserveCommit = null
-          this.commitSelection(commit)
+          this.commitSelection(range, forceCommit)
         } else if (this.pendingBrushCommit && this.ionRangeSlider) {
           this.pendingBrushCommit = false
           this.commitSelection(this.ionRangeSlider.result)
@@ -621,8 +662,9 @@ export default defineComponent({
     }
     this.chartPreserveZoomRedraw = null
     this.handleInteractionActive = false
-    this.chartSyncedData = null
+    this.chartSyncedSeriesSig = ''
     this.chartSyncedType = null
+    this.lastCommittedRange = null
     this.pendingExternalModelValue = null
     this.pendingPreserveCommit = null
     this.pendingBrushCommit = false

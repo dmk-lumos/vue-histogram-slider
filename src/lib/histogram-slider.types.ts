@@ -189,7 +189,8 @@ export interface HistogramSliderPublicProps {
  * **`update:modelValue`** only (no **`rangeUpdated`**). Keyboard nudges may **`onFinish`** without **`dragStart`**.
  *
  * **`rangeUpdated`** — **committed** selection: handle release (with **`dragEnd`**), **brush** zoom, or
- * preserve‑zoom **`data` / `type`** refresh (even when `from`/`to` are unchanged). Does **not** fire on
+ * preserve‑zoom **`data` / `type`** refresh when the series or clamped range actually changed. Omitted when
+ * the committed `from`/`to` match the previous commit (same handles after a no-op rebuild). Does **not** fire on
  * double‑click full-domain reset — use **`rangeReset`**. Not fired for live handle drag frames.
  *
  * **Ion re-init** (histogram rebuild + plugin recreate) runs only on: **initial mount**, **brush** zoom,
